@@ -35,10 +35,26 @@ export async function apiFetch<T>(
     headers,
   });
 
-  const json = await res.json();
+  const text = await res.text();
+  if (!text.trim()) {
+    throw new Error(
+      res.ok
+        ? "Server returned an empty response. Redeploy latest code or check Vercel function logs."
+        : `Request failed (${res.status}) with empty body`
+    );
+  }
+
+  let json: { success?: boolean; message?: string; data?: T };
+  try {
+    json = JSON.parse(text) as typeof json;
+  } catch {
+    throw new Error(
+      `Invalid JSON from API (${res.status}). Check that /api routes are deployed.`
+    );
+  }
 
   if (!res.ok || json.success === false) {
-    throw new Error(json.message || "Request failed");
+    throw new Error(json.message || `Request failed (${res.status})`);
   }
 
   return json.data as T;

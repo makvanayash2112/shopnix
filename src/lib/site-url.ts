@@ -1,7 +1,8 @@
 /** Browser / SSR API base — empty = same origin (Vercel production). */
 export function getClientApiBase(): string {
-  if (process.env.NEXT_PUBLIC_API_URL !== undefined) {
-    return process.env.NEXT_PUBLIC_API_URL.replace(/\/$/, "");
+  const publicApi = process.env.NEXT_PUBLIC_API_URL?.trim();
+  if (publicApi) {
+    return publicApi.replace(/\/$/, "");
   }
   if (typeof window !== "undefined") {
     return "";
