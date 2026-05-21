@@ -11,7 +11,7 @@ Everything runs on **one domain**:
 | `/ondc-bap/*` | ONDC Buyer (BAP) |
 | `/uploads/*` | Product images (local dev; use Blob on Vercel) |
 
-**How it works on Vercel:** Next.js serves the UI. `vercel.json` rewrites `/api`, `/ondc`, `/ondc-bap`, and `/uploads` to `backend/handler.ts` (Express + MongoDB). Same domain, no second project.
+**How it works on Vercel:** Next.js serves the UI and API via App Router routes (`src/app/api`, `src/app/ondc`, etc.) that run your Express app. Do not add a `functions` block for `backend/handler.ts` — that path is not used with the Next.js framework.
 
 **Local dev:** `npm run dev` runs Express on port `4000` and Next on `3000`; Next rewrites proxy API/ONDC paths to Express.
 

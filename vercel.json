@@ -1,15 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "framework": "nextjs",
-  "rewrites": [
-    { "source": "/api/:path*", "destination": "/backend/handler" },
-    { "source": "/ondc", "destination": "/backend/handler" },
-    { "source": "/ondc/:path*", "destination": "/backend/handler" },
-    { "source": "/ondc-bap", "destination": "/backend/handler" },
-    { "source": "/ondc-bap/:path*", "destination": "/backend/handler" },
-    { "source": "/uploads/:path*", "destination": "/backend/handler" }
-  ],
-  "functions": {
-    "backend/handler.ts": { "maxDuration": 60 }
-  }
+  "framework": "nextjs"
 }
