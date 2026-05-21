@@ -22,8 +22,6 @@ import { OndcLog } from "../models/OndcLog";
 
 const router = Router();
 
-router.use(logOndcIncoming);
-
 type BecknBody = {
   context: BecknContext;
   message?: Record<string, unknown>;
@@ -33,7 +31,7 @@ function ack(res: import("express").Response) {
   return res.status(200).json(buildAckResponse());
 }
 
-/** ONDC health / subscriber verification */
+/** Browser / portal health check — no Beckn body (must be before logOndcIncoming) */
 router.get("/", (_req, res) => {
   res.json({
     name: "Shopnix ONDC BPP",
@@ -41,8 +39,12 @@ router.get("/", (_req, res) => {
     bpp_id: env.ondc.bppId,
     bpp_uri: env.ondc.bppUri,
     status: "active",
+    note: "Beckn APIs are POST only — use /ondc/search with JSON body in Postman",
   });
 });
+
+/** Beckn POST routes require valid context in JSON body */
+router.use(logOndcIncoming);
 
 router.post("/search", (req, res) => {
   ack(res);

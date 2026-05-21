@@ -7,6 +7,10 @@ export async function logOndcIncoming(
   res: Response,
   next: NextFunction
 ) {
+  if (req.method === "GET" || req.method === "HEAD") {
+    return next();
+  }
+
   const body = req.body as {
     context?: { action?: string; transaction_id?: string };
   };
