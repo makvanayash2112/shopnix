@@ -2,7 +2,9 @@ import dotenv from "dotenv";
 import path from "path";
 import { getSiteUrl } from "../lib/site-url";
 
-dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+if (!process.env.VERCEL) {
+  dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+}
 
 const siteUrl = getSiteUrl();
 

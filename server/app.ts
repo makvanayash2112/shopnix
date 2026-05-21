@@ -11,13 +11,20 @@ export function createApp() {
   const app = express();
   const siteUrl = getSiteUrl();
 
+  const allowedOrigins = [
+    "http://localhost:3000",
+    siteUrl,
+    process.env.NEXT_PUBLIC_APP_URL || "",
+    process.env.NEXT_PUBLIC_API_URL || "",
+  ].filter(Boolean);
+
+  if (process.env.VERCEL_URL) {
+    allowedOrigins.push(`https://${process.env.VERCEL_URL}`);
+  }
+
   app.use(
     cors({
-      origin: [
-        "http://localhost:3000",
-        siteUrl,
-        process.env.NEXT_PUBLIC_APP_URL || "",
-      ].filter(Boolean),
+      origin: allowedOrigins,
       credentials: true,
     })
   );

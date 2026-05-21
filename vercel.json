@@ -2,14 +2,14 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "/api/express" },
-    { "source": "/ondc", "destination": "/api/express" },
-    { "source": "/ondc/:path*", "destination": "/api/express" },
-    { "source": "/ondc-bap", "destination": "/api/express" },
-    { "source": "/ondc-bap/:path*", "destination": "/api/express" },
-    { "source": "/uploads/:path*", "destination": "/api/express" }
+    { "source": "/api/:path*", "destination": "/backend/handler" },
+    { "source": "/ondc", "destination": "/backend/handler" },
+    { "source": "/ondc/:path*", "destination": "/backend/handler" },
+    { "source": "/ondc-bap", "destination": "/backend/handler" },
+    { "source": "/ondc-bap/:path*", "destination": "/backend/handler" },
+    { "source": "/uploads/:path*", "destination": "/backend/handler" }
   ],
   "functions": {
-    "api/express.ts": { "maxDuration": 60 }
+    "backend/handler.ts": { "maxDuration": 60 }
   }
 }
