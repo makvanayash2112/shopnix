@@ -1,8 +1,8 @@
 import type { NextRequest } from "next/server";
-import { runExpress } from "./express-bridge";
 
 async function handle(req: NextRequest) {
   try {
+    const { runExpress } = await import("./express-bridge");
     return await runExpress(req);
   } catch (err) {
     console.error("[api-route]", err);

@@ -1,4 +1,5 @@
 import { getClientApiBase } from "./site-url";
+import { parseApiJson } from "./parse-api-response";
 
 const BUYER_TOKEN_KEY = "shopnix_buyer_token";
 
@@ -38,9 +39,9 @@ export async function buyerFetch<T>(
     headers,
   });
 
-  const json = await res.json();
+  const { ok, json } = await parseApiJson<T>(res);
 
-  if (!res.ok || json.success === false) {
+  if (!ok || json.success === false) {
     throw new Error(json.message || "Request failed");
   }
 

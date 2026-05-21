@@ -1,31 +1,63 @@
 import mongoose from "mongoose";
-import { env } from "./env";
+
+interface MongooseCache {
+  conn: typeof mongoose | null;
+  promise: Promise<typeof mongoose> | null;
+}
 
 declare global {
   // eslint-disable-next-line no-var
-  var __shopnixDb: { connected: boolean } | undefined;
+  var __shopnixMongoose: MongooseCache | undefined;
 }
 
-export async function connectDatabase(): Promise<void> {
-  if (global.__shopnixDb?.connected && mongoose.connection.readyState === 1) {
-    return;
+const cache: MongooseCache = global.__shopnixMongoose ?? {
+  conn: null,
+  promise: null,
+};
+global.__shopnixMongoose = cache;
+
+function getMongoUri(): string {
+  const uri = process.env.MONGODB_URI?.trim();
+  if (!uri) {
+    throw new Error(
+      "MONGODB_URI is not set. Add it in Vercel → Settings → Environment Variables."
+    );
+  }
+  if (process.env.VERCEL && uri.includes("127.0.0.1")) {
+    throw new Error(
+      "MONGODB_URI points to localhost. Use your MongoDB Atlas connection string on Vercel."
+    );
+  }
+  return uri;
+}
+
+export async function connectDatabase(): Promise<typeof mongoose> {
+  if (cache.conn && mongoose.connection.readyState === 1) {
+    return cache.conn;
   }
 
-  if (!env.mongodbUri || env.mongodbUri.includes("127.0.0.1")) {
-    if (process.env.VERCEL) {
-      throw new Error(
-        "MONGODB_URI is missing or still set to localhost. Add Atlas URI in Vercel Environment Variables."
-      );
-    }
+  if (!cache.promise) {
+    const uri = getMongoUri();
+    cache.promise = mongoose
+      .connect(uri, {
+        serverSelectionTimeoutMS: 8000,
+        connectTimeoutMS: 8000,
+        socketTimeoutMS: 20000,
+        maxPoolSize: 10,
+        bufferCommands: false,
+        family: 4,
+      })
+      .then((m) => {
+        console.log("[db] MongoDB connected");
+        return m;
+      })
+      .catch((err) => {
+        cache.promise = null;
+        console.error("[db] MongoDB connection failed:", err.message);
+        throw err;
+      });
   }
 
-  if (mongoose.connection.readyState === 0) {
-    await mongoose.connect(env.mongodbUri, {
-      serverSelectionTimeoutMS: 10000,
-      maxPoolSize: 10,
-    });
-  }
-
-  global.__shopnixDb = { connected: true };
-  console.log("[db] MongoDB connected");
+  cache.conn = await cache.promise;
+  return cache.conn;
 }
