@@ -46,63 +46,66 @@ router.get("/", (_req, res) => {
 /** Beckn POST routes require valid context in JSON body */
 router.use(logOndcIncoming);
 
-router.post("/search", (req, res) => {
-  ack(res);
+router.post("/search", async (req, res) => {
   const body = req.body as BecknBody;
-  setImmediate(async () => {
+  try {
     const { seller, products } = await getPublishedCatalog();
-    if (!seller) return;
-
-    const context = replyContext(body.context, "on_search");
-    const message = buildCatalogMessage(seller, products, env.apiBaseUrl);
-    await postToBap(context, "on_search", message);
-  });
+    if (seller) {
+      const context = replyContext(body.context, "on_search");
+      const message = buildCatalogMessage(seller, products, env.apiBaseUrl);
+      await postToBap(context, "on_search", message);
+    }
+  } catch (err) {
+    console.error("[search] Error:", err);
+  }
+  ack(res);
 });
 
-router.post("/select", (req, res) => {
-  ack(res);
+router.post("/select", async (req, res) => {
   const body = req.body as BecknBody;
-  setImmediate(async () => {
+  try {
     const order = await findOrderByTransaction(body.context.transaction_id);
     const { seller, products } = await getPublishedCatalog();
-    if (!seller) return;
+    if (seller) {
+      const selectItems =
+        (body.message?.order as { items?: { id: string }[] })?.items ?? [];
 
-    const selectItems =
-      (body.message?.order as { items?: { id: string }[] })?.items ?? [];
+      const matched = products.filter((p) =>
+        selectItems.some((i) => i.id === p.ondcItemId)
+      );
 
-    const matched = products.filter((p) =>
-      selectItems.some((i) => i.id === p.ondcItemId)
-    );
+      const context = replyContext(body.context, "on_select");
+      const quoteValue = matched.reduce((s, p) => s + p.price, 0);
 
-    const context = replyContext(body.context, "on_select");
-    const quoteValue = matched.reduce((s, p) => s + p.price, 0);
-
-    await postToBap(context, "on_select", {
-      order: {
-        items: matched.map((p) => ({
-          id: p.ondcItemId,
-          fulfillment_id: "F1",
-          quantity: { count: 1 },
-        })),
-        provider: { id: seller._id.toString() },
-        quote: {
-          price: { currency: "INR", value: String(quoteValue) },
-          breakup: matched.map((p) => ({
-            title: p.name,
-            price: { currency: "INR", value: String(p.price) },
-            item: { id: p.ondcItemId },
+      await postToBap(context, "on_select", {
+        order: {
+          items: matched.map((p) => ({
+            id: p.ondcItemId,
+            fulfillment_id: "F1",
+            quantity: { count: 1 },
           })),
+          provider: { id: seller._id.toString() },
+          quote: {
+            price: { currency: "INR", value: String(quoteValue) },
+            breakup: matched.map((p) => ({
+              title: p.name,
+              price: { currency: "INR", value: String(p.price) },
+              item: { id: p.ondcItemId },
+            })),
+          },
+          ...(order ? { id: order.orderId } : {}),
         },
-        ...(order ? { id: order.orderId } : {}),
-      },
-    });
-  });
+      });
+    }
+  } catch (err) {
+    console.error("[select] Error:", err);
+  }
+  ack(res);
 });
 
-router.post("/init", (req, res) => {
-  ack(res);
+router.post("/init", async (req, res) => {
   const body = req.body as BecknBody;
-  setImmediate(async () => {
+  try {
     const orderMsg = body.message?.order as {
       items?: { id: string; quantity?: { count?: number } }[];
       billing?: Record<string, unknown>;
@@ -116,93 +119,105 @@ router.post("/init", (req, res) => {
 
     const context = replyContext(body.context, "on_init");
     await postToBap(context, "on_init", buildOrderMessage(order));
-  });
+  } catch (err) {
+    console.error("[init] Error:", err);
+  }
+  ack(res);
 });
 
-router.post("/confirm", (req, res) => {
-  ack(res);
+router.post("/confirm", async (req, res) => {
   const body = req.body as BecknBody;
-  setImmediate(async () => {
+  try {
     const order = await findOrderByTransaction(body.context.transaction_id);
-    if (!order) return;
+    if (order) {
+      order.status = "Accepted";
+      order.fulfillment = order.fulfillment || { type: "Delivery" };
+      order.fulfillment.state = "Confirmed";
+      order.payment.status = "NOT-PAID";
+      order.payment.method = "cash";
+      order.bapOrderId = (body.message?.order as { id?: string })?.id;
+      await order.save();
 
-    order.status = "Accepted";
-    order.fulfillment = order.fulfillment || { type: "Delivery" };
-    order.fulfillment.state = "Confirmed";
-    order.payment.status = "NOT-PAID";
-    order.payment.method = "cash";
-    order.bapOrderId = (body.message?.order as { id?: string })?.id;
-    await order.save();
-
-    const context = replyContext(body.context, "on_confirm");
-    await postToBap(context, "on_confirm", buildOrderMessage(order));
-  });
+      const context = replyContext(body.context, "on_confirm");
+      await postToBap(context, "on_confirm", buildOrderMessage(order));
+    }
+  } catch (err) {
+    console.error("[confirm] Error:", err);
+  }
+  ack(res);
 });
 
-router.post("/status", (req, res) => {
-  ack(res);
+router.post("/status", async (req, res) => {
   const body = req.body as BecknBody;
-  setImmediate(async () => {
+  try {
     const order = await findOrderByTransaction(body.context.transaction_id);
-    if (!order) return;
-
-    const context = replyContext(body.context, "on_status");
-    await postToBap(context, "on_status", buildOrderMessage(order));
-  });
+    if (order) {
+      const context = replyContext(body.context, "on_status");
+      await postToBap(context, "on_status", buildOrderMessage(order));
+    }
+  } catch (err) {
+    console.error("[status] Error:", err);
+  }
+  ack(res);
 });
 
-router.post("/cancel", (req, res) => {
-  ack(res);
+router.post("/cancel", async (req, res) => {
   const body = req.body as BecknBody;
-  setImmediate(async () => {
+  try {
     const order = await updateOrderStatus(
       body.context.transaction_id,
       "Cancelled"
     );
-    if (!order) return;
-
-    const context = replyContext(body.context, "on_cancel");
-    await postToBap(context, "on_cancel", buildOrderMessage(order));
-  });
+    if (order) {
+      const context = replyContext(body.context, "on_cancel");
+      await postToBap(context, "on_cancel", buildOrderMessage(order));
+    }
+  } catch (err) {
+    console.error("[cancel] Error:", err);
+  }
+  ack(res);
 });
 
-router.post("/update", (req, res) => {
-  ack(res);
+router.post("/update", async (req, res) => {
   const body = req.body as BecknBody;
-  setImmediate(async () => {
+  try {
     const order = await findOrderByTransaction(body.context.transaction_id);
-    if (!order) return;
-
-    const context = replyContext(body.context, "on_update");
-    await postToBap(context, "on_update", buildOrderMessage(order));
-  });
+    if (order) {
+      const context = replyContext(body.context, "on_update");
+      await postToBap(context, "on_update", buildOrderMessage(order));
+    }
+  } catch (err) {
+    console.error("[update] Error:", err);
+  }
+  ack(res);
 });
 
-router.post("/track", (req, res) => {
-  ack(res);
+router.post("/track", async (req, res) => {
   const body = req.body as BecknBody;
-  setImmediate(async () => {
+  try {
     const order = await findOrderByTransaction(body.context.transaction_id);
-    if (!order) return;
-
-    const context = replyContext(body.context, "on_track");
-    await postToBap(context, "on_track", {
-      tracking: {
-        url: order.fulfillment?.tracking || `${env.apiBaseUrl}/track/${order.orderId}`,
-        status: order.fulfillment?.state || "Pending",
-      },
-    });
-  });
+    if (order) {
+      const context = replyContext(body.context, "on_track");
+      await postToBap(context, "on_track", {
+        tracking: {
+          url: order.fulfillment?.tracking || `${env.apiBaseUrl}/track/${order.orderId}`,
+          status: order.fulfillment?.state || "Pending",
+        },
+      });
+    }
+  } catch (err) {
+    console.error("[track] Error:", err);
+  }
+  ack(res);
 });
 
 router.post("/rating", (req, res) => {
   ack(res);
 });
 
-router.post("/support", (req, res) => {
-  ack(res);
+router.post("/support", async (req, res) => {
   const body = req.body as BecknBody;
-  setImmediate(async () => {
+  try {
     const seller = await getPrimarySeller();
     const context = replyContext(body.context, "on_support");
     await postToBap(context, "on_support", {
@@ -212,7 +227,10 @@ router.post("/support", (req, res) => {
         uri: env.apiBaseUrl,
       },
     });
-  });
+  } catch (err) {
+    console.error("[support] Error:", err);
+  }
+  ack(res);
 });
 
 /** Admin: view ONDC transaction logs */
