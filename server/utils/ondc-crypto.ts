@@ -20,7 +20,7 @@ export async function createAuthorizationHeader(payload: Record<string, unknown>
   const bodyString = JSON.stringify(payload);
   
   // Blake2b hash of the body string
-  const hash = sodium.crypto_generichash(64, bodyString);
+  const hash = sodium.crypto_generichash(64, bodyString, new Uint8Array());
   const digest = sodium.to_base64(hash, sodium.base64_variants.ORIGINAL);
 
   const signatureString = `(created): ${created}\n(expires): ${expires}\ndigest: BLAKE-512=${digest}`;
