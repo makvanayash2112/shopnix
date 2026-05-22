@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { OndcLog } from "../models/OndcLog";
 import { buildNackResponse } from "../utils/beckn";
+import { verifyAuthorizationHeader } from "../utils/ondc-crypto";
 
 export async function logOndcIncoming(
   req: Request,
@@ -9,6 +10,13 @@ export async function logOndcIncoming(
 ) {
   if (req.method === "GET" || req.method === "HEAD") {
     return next();
+  }
+
+  const authHeader = req.headers.authorization;
+  const isVerified = await verifyAuthorizationHeader(authHeader, req.body);
+  
+  if (!isVerified) {
+    return res.status(401).json(buildNackResponse({ message: "Invalid Authorization Signature" }));
   }
 
   const body = req.body as {

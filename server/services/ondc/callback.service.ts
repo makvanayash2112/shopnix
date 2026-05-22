@@ -2,6 +2,7 @@ import axios from "axios";
 import { OndcLog } from "../../models/OndcLog";
 import type { BecknContext } from "../../utils/beckn";
 import { callbackUrl } from "../../utils/beckn";
+import { createAuthorizationHeader } from "../../utils/ondc-crypto";
 
 export async function postToBap(
   context: BecknContext,
@@ -19,8 +20,13 @@ export async function postToBap(
   }).catch(() => undefined);
 
   try {
+    const authHeader = await createAuthorizationHeader(payload);
+    
     await axios.post(url, payload, {
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        ...(authHeader ? { Authorization: authHeader } : {})
+      },
       timeout: 15000,
     });
   } catch (err) {

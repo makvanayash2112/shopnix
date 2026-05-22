@@ -4,6 +4,7 @@ import { env } from "../../config/env";
 import { OndcLog } from "../../models/OndcLog";
 import type { BecknContext } from "../../utils/beckn";
 import { replyContext } from "../../utils/beckn";
+import { createAuthorizationHeader } from "../../utils/ondc-crypto";
 
 export interface BapCatalogCache {
   transactionId: string;
@@ -63,8 +64,12 @@ export async function sendToBpp(
   }).catch(() => undefined);
 
   try {
+    const authHeader = await createAuthorizationHeader(payload);
     const res = await axios.post(url, payload, {
-      headers: { "Content-Type": "application/json" },
+      headers: { 
+        "Content-Type": "application/json",
+        ...(authHeader ? { Authorization: authHeader } : {})
+      },
       timeout: 15000,
     });
     return { transactionId, ack: res.data };
