@@ -22,14 +22,19 @@ export async function postToBap(
   try {
     const authHeader = await createAuthorizationHeader(payload);
     
-    await axios.post(url, payload, {
+    console.log(`[ondc] Sending ${action} to ${url}...`);
+    console.log(`[ondc] Payload:`, JSON.stringify(payload, null, 2));
+    
+    const response = await axios.post(url, payload, {
       headers: { 
         "Content-Type": "application/json",
         ...(authHeader ? { Authorization: authHeader } : {})
       },
       timeout: 15000,
     });
-  } catch (err) {
-    console.error(`[ondc] Failed POST ${url}`, err);
+    
+    console.log(`[ondc] Success: Pramaan returned status ${response.status}`);
+  } catch (err: any) {
+    console.error(`[ondc] Failed POST ${url}`, err?.response?.data || err.message);
   }
 }
