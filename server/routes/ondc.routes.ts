@@ -155,10 +155,10 @@ router.post("/select", async (req, res) => {
             fulfillment_id: "F1",
             quantity: { count: 1 },
           })),
-          // provider: { id: seller._id.toString() },
-          provider: {
-            id: seller.ondcProviderId || "SHOPNIX_PROVIDER"
-          },
+          provider: { id: seller._id.toString() },
+          // provider: {
+          //   id: seller.ondcProviderId || "SHOPNIX_PROVIDER"
+          // },
           quote: {
             price: { currency: "INR", value: String(quoteValue) },
             breakup: matched.map((p) => ({
