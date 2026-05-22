@@ -32,6 +32,34 @@ export function createApp() {
   app.use(express.json({ limit: "2mb" }));
   app.use(express.urlencoded({ extended: true }));
 
+  // Global Request & Response Logger (Logs all steps, payloads, success/errors for ALL APIs)
+  app.use((req, res, next) => {
+    const startTime = Date.now();
+    console.log(`\n================== [API REQUEST] ${req.method} ${req.originalUrl} ==================`);
+    if (Object.keys(req.body || {}).length > 0) {
+      console.log(`[INCOMING PAYLOAD]:\n`, JSON.stringify(req.body, null, 2));
+    } else if (Object.keys(req.query || {}).length > 0) {
+      console.log(`[INCOMING QUERY]:\n`, JSON.stringify(req.query, null, 2));
+    }
+
+    // Intercept response to log it
+    const originalSend = res.send;
+    res.send = function (body) {
+      console.log(`\n[API RESPONSE] ${req.method} ${req.originalUrl} - Status: ${res.statusCode} - Time: ${Date.now() - startTime}ms`);
+      if (res.statusCode >= 400) {
+        console.error(`[API ERROR RESPONSE]:`);
+      }
+      try {
+        const parsed = typeof body === "string" ? JSON.parse(body) : body;
+        console.log(`[RESPONSE PAYLOAD]:\n`, JSON.stringify(parsed, null, 2));
+      } catch (e) {
+        console.log(`[RESPONSE PAYLOAD]:\n`, body);
+      }
+      return originalSend.call(this, body);
+    };
+    next();
+  });
+
   app.use(
     "/uploads",
     express.static(path.join(process.cwd(), "public", "uploads"))

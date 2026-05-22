@@ -8,6 +8,8 @@ interface MongooseCache {
 declare global {
   // eslint-disable-next-line no-var
   var __shopnixMongoose: MongooseCache | undefined;
+  // eslint-disable-next-line no-var
+  var __shopnixDbLogged: boolean | undefined;
 }
 
 const cache: MongooseCache = global.__shopnixMongoose ?? {
@@ -48,7 +50,16 @@ export async function connectDatabase(): Promise<typeof mongoose> {
         family: 4,
       })
       .then((m) => {
-        console.log("[db] MongoDB connected");
+        if (!global.__shopnixDbLogged) {
+          console.log("[db] MongoDB connected successfully");
+          global.__shopnixDbLogged = true;
+        }
+        
+        // Log all database steps (queries, updates, inserts)
+        mongoose.set("debug", (collectionName, method, query, doc) => {
+          console.log(`[DB STEP] ${collectionName}.${method} | Query:`, JSON.stringify(query));
+        });
+        
         return m;
       })
       .catch((err) => {

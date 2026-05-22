@@ -227,54 +227,73 @@ router.post("/confirm", async (req, res) => {
 
 router.post("/status", async (req, res) => {
   const body = req.body as BecknBody;
+  ack(res);
   try {
+    console.log("========== STATUS REQUEST ==========");
+    console.log(JSON.stringify(body, null, 2));
     const order = await findOrderByTransaction(body.context.transaction_id);
     if (order) {
+      console.log(`[status] Found order: ${order.orderId}`);
       const context = replyContext(body.context, "on_status");
       await postToBap(context, "on_status", buildOrderMessage(order));
+    } else {
+      console.log(`[status] No order found for transaction: ${body.context.transaction_id}`);
     }
   } catch (err) {
     console.error("[status] Error:", err);
   }
-  ack(res);
 });
 
 router.post("/cancel", async (req, res) => {
   const body = req.body as BecknBody;
+  ack(res);
   try {
+    console.log("========== CANCEL REQUEST ==========");
+    console.log(JSON.stringify(body, null, 2));
     const order = await updateOrderStatus(
       body.context.transaction_id,
       "Cancelled"
     );
     if (order) {
+      console.log(`[cancel] Order cancelled: ${order.orderId}`);
       const context = replyContext(body.context, "on_cancel");
       await postToBap(context, "on_cancel", buildOrderMessage(order));
+    } else {
+      console.log(`[cancel] No order found to cancel for transaction: ${body.context.transaction_id}`);
     }
   } catch (err) {
     console.error("[cancel] Error:", err);
   }
-  ack(res);
 });
 
 router.post("/update", async (req, res) => {
   const body = req.body as BecknBody;
+  ack(res);
   try {
+    console.log("========== UPDATE REQUEST ==========");
+    console.log(JSON.stringify(body, null, 2));
     const order = await findOrderByTransaction(body.context.transaction_id);
     if (order) {
+      console.log(`[update] Found order: ${order.orderId}`);
       const context = replyContext(body.context, "on_update");
       await postToBap(context, "on_update", buildOrderMessage(order));
+    } else {
+      console.log(`[update] No order found to update for transaction: ${body.context.transaction_id}`);
     }
   } catch (err) {
     console.error("[update] Error:", err);
   }
-  ack(res);
 });
 
 router.post("/track", async (req, res) => {
   const body = req.body as BecknBody;
+  ack(res);
   try {
+    console.log("========== TRACK REQUEST ==========");
+    console.log(JSON.stringify(body, null, 2));
     const order = await findOrderByTransaction(body.context.transaction_id);
     if (order) {
+      console.log(`[track] Tracking details for order: ${order.orderId}`);
       const context = replyContext(body.context, "on_track");
       await postToBap(context, "on_track", {
         tracking: {
@@ -282,11 +301,12 @@ router.post("/track", async (req, res) => {
           status: order.fulfillment?.state || "Pending",
         },
       });
+    } else {
+      console.log(`[track] No order found for transaction: ${body.context.transaction_id}`);
     }
   } catch (err) {
     console.error("[track] Error:", err);
   }
-  ack(res);
 });
 
 router.post("/rating", (req, res) => {
@@ -295,20 +315,27 @@ router.post("/rating", (req, res) => {
 
 router.post("/support", async (req, res) => {
   const body = req.body as BecknBody;
+  ack(res);
   try {
+    console.log("========== SUPPORT REQUEST ==========");
+    console.log(JSON.stringify(body, null, 2));
     const seller = await getPrimarySeller();
-    const context = replyContext(body.context, "on_support");
-    await postToBap(context, "on_support", {
-      support: {
-        phone: seller.phone || "9999999999",
-        email: seller.email,
-        uri: env.apiBaseUrl,
-      },
-    });
+    if (seller) {
+      console.log(`[support] Found primary seller details`);
+      const context = replyContext(body.context, "on_support");
+      await postToBap(context, "on_support", {
+        support: {
+          phone: seller.phone || "9999999999",
+          email: seller.email,
+          uri: env.apiBaseUrl,
+        },
+      });
+    } else {
+      console.log(`[support] No primary seller found!`);
+    }
   } catch (err) {
     console.error("[support] Error:", err);
   }
-  ack(res);
 });
 
 /** Admin: view ONDC transaction logs */
