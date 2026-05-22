@@ -22,6 +22,9 @@ import { OndcLog } from "../models/OndcLog";
 
 const router = Router();
 
+router.use(logOndcIncoming);
+
+
 type BecknBody = {
   context: BecknContext;
   message?: Record<string, unknown>;
@@ -43,27 +46,95 @@ router.get("/", (_req, res) => {
   });
 });
 
+/** Test endpoint to view your catalog exactly as ONDC sees it */
+router.get("/test-catalog", async (req, res) => {
+  try {
+    const { seller, products } = await getPublishedCatalog();
+    if (!seller) {
+      return res.json({ error: "No seller found in the database!" });
+    }
+    const message = buildCatalogMessage(seller, products, env.apiBaseUrl);
+    res.json({ success: true, productCount: products.length, catalog: message });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 /** Beckn POST routes require valid context in JSON body */
-router.use(logOndcIncoming);
+
+// router.post("/search", async (req, res) => {
+//   const body = req.body as BecknBody;
+//   try {
+//     const { seller, products } = await getPublishedCatalog();
+//     if (seller) {
+//       const context = replyContext(body.context, "on_search");
+//       const message = buildCatalogMessage(seller, products, env.apiBaseUrl);
+//       await postToBap(context, "on_search", message);
+//     }
+//   } catch (err) {
+//     console.error("[search] Error:", err);
+//   }
+//   ack(res);
+// });
 
 router.post("/search", async (req, res) => {
   const body = req.body as BecknBody;
-  try {
-    const { seller, products } = await getPublishedCatalog();
-    if (seller) {
-      const context = replyContext(body.context, "on_search");
-      const message = buildCatalogMessage(seller, products, env.apiBaseUrl);
-      await postToBap(context, "on_search", message);
-    }
-  } catch (err) {
-    console.error("[search] Error:", err);
-  }
+
+  // IMPORTANT: ACK immediately
   ack(res);
+
+  try {
+    console.log("========== SEARCH REQUEST ==========");
+    console.log(JSON.stringify(body, null, 2));
+
+    const { seller, products } = await getPublishedCatalog();
+
+    console.log("SELLER:", seller);
+    console.log("TOTAL PRODUCTS:", products.length);
+
+    if (!seller) {
+      console.log("NO SELLER FOUND");
+      return;
+    }
+
+    const context = replyContext(body.context, "on_search");
+
+    console.log("REPLY CONTEXT:");
+    console.log(JSON.stringify(context, null, 2));
+
+    const message = buildCatalogMessage(
+      seller,
+      products,
+      env.apiBaseUrl
+    );
+
+    console.log("CATALOG MESSAGE:");
+    console.log(JSON.stringify(message, null, 2));
+
+    console.log("CALLING BAP CALLBACK...");
+
+    const response = await postToBap(
+      context,
+      "on_search",
+      message
+    );
+
+    console.log("BAP CALLBACK SUCCESS");
+    console.log(response);
+  } catch (err) {
+    console.error("SEARCH ERROR:");
+    console.error(err);
+  }
 });
 
 router.post("/select", async (req, res) => {
+
   const body = req.body as BecknBody;
+
+
   try {
+    console.log("SELECT REQUEST:");
+    console.log(JSON.stringify(body, null, 2));
     const order = await findOrderByTransaction(body.context.transaction_id);
     const { seller, products } = await getPublishedCatalog();
     if (seller) {
@@ -84,7 +155,10 @@ router.post("/select", async (req, res) => {
             fulfillment_id: "F1",
             quantity: { count: 1 },
           })),
-          provider: { id: seller._id.toString() },
+          // provider: { id: seller._id.toString() },
+          provider: {
+            id: seller.ondcProviderId || "SHOPNIX_PROVIDER"
+          },
           quote: {
             price: { currency: "INR", value: String(quoteValue) },
             breakup: matched.map((p) => ({
@@ -106,6 +180,8 @@ router.post("/select", async (req, res) => {
 router.post("/init", async (req, res) => {
   const body = req.body as BecknBody;
   try {
+    console.log("INIT REQUEST:");
+    console.log(JSON.stringify(body, null, 2));
     const orderMsg = body.message?.order as {
       items?: { id: string; quantity?: { count?: number } }[];
       billing?: Record<string, unknown>;
@@ -128,6 +204,8 @@ router.post("/init", async (req, res) => {
 router.post("/confirm", async (req, res) => {
   const body = req.body as BecknBody;
   try {
+    console.log("CONFIRM REQUEST:");
+    console.log(JSON.stringify(body, null, 2));
     const order = await findOrderByTransaction(body.context.transaction_id);
     if (order) {
       order.status = "Accepted";
