@@ -13,8 +13,80 @@
 //   return `SHA-256=${hash}`;
 // }
 
+// // export async function createAuthorizationHeader(
+// //   body: string
+// // ): Promise<string> {
+
+// //   await sodium.ready;
+
+// //   const created =
+// //     Math.floor(Date.now() / 1000);
+
+// //   const expires =
+// //     created + 300;
+
+// //   const digest =
+// //     createDigest(body);
+
+// //   const signingString =
+// //     `(created): ${created}\n` +
+// //     `(expires): ${expires}\n` +
+// //     `digest: ${digest}`;
+
+// //   console.log("SIGNING STRING:");
+// //   console.log(signingString);
+
+// //   const privateKey =
+// //     sodium.from_base64(
+// //       env.ondc.signingPrivateKey,
+// //       sodium.base64_variants.ORIGINAL
+// //     );
+
+// //   console.log(
+// //     "PRIVATE KEY LENGTH:",
+// //     privateKey.length
+// //   );
+
+// //   // const signatureBytes =
+// //   //   sodium.crypto_sign_detached(
+// //   //     signingString,
+// //   //     privateKey
+// //   //   );
+
+// //   const signatureBytes =
+// //     sodium.crypto_sign_detached(
+// //       sodium.from_string(signingString),
+// //       privateKey
+// //     );
+
+// //   const signature =
+// //     sodium.to_base64(
+// //       signatureBytes,
+// //       sodium.base64_variants.ORIGINAL
+// //     );
+
+// //   const keyId =
+// //     `${env.ondc.subscriberId}` +
+// //     `|${env.ondc.uniqueKeyId}` +
+// //     `|ed25519`;
+
+// //   const authHeader =
+// //     `Signature ` +
+// //     `keyId="${keyId}",` +
+// //     `algorithm="ed25519",` +
+// //     `created="${created}",` +
+// //     `expires="${expires}",` +
+// //     `headers="(created) (expires) digest",` +
+// //     `signature="${signature}"`;
+
+// //   console.log("AUTH HEADER:");
+// //   console.log(authHeader);
+
+// //   return authHeader;
+// // }
+
 // export async function createAuthorizationHeader(
-//   payload: Record<string, unknown>
+//   body: string
 // ): Promise<string> {
 
 //   await sodium.ready;
@@ -25,9 +97,6 @@
 //   const expires =
 //     created + 300;
 
-//   const body =
-//     JSON.stringify(payload);
-
 //   const digest =
 //     createDigest(body);
 
@@ -36,117 +105,108 @@
 //     `(expires): ${expires}\n` +
 //     `digest: ${digest}`;
 
-//   try {
+//   console.log("SIGNING STRING:");
+//   console.log(signingString);
 
-//     const privateKey =
-//       sodium.from_base64(
-//         env.ondc.signingPrivateKey,
-//         sodium.base64_variants.ORIGINAL
-//       );
-
-//     const signatureBytes =
-//       sodium.crypto_sign_detached(
-//         signingString,
-//         privateKey
-//       );
-
-//     const signature =
-//       sodium.to_base64(
-//         signatureBytes,
-//         sodium.base64_variants.ORIGINAL
-//       );
-
-//     const keyId =
-//       `${env.ondc.subscriberId}` +
-//       `|${env.ondc.uniqueKeyId}` +
-//       `|ed25519`;
-
-//     return (
-//       `Signature ` +
-//       `keyId="${keyId}",` +
-//       `algorithm="ed25519",` +
-//       `created="${created}",` +
-//       `expires="${expires}",` +
-//       `headers="(created) (expires) digest",` +
-//       `signature="${signature}"`
+//   // Decode base64 seed
+//   const seed =
+//     sodium.from_base64(
+//       env.ondc.signingPrivateKey,
+//       sodium.base64_variants.ORIGINAL
 //     );
 
-//   } catch (err) {
+//   console.log("SEED LENGTH:", seed.length);
 
-//     console.error(
-//       "[ondc] Signature creation failed",
-//       err
-//     );
+//   let privateKey: Uint8Array;
 
-//     return "";
+//   // ONDC may give 32-byte seed
+//   if (seed.length === 32) {
+
+//     const keyPair =
+//       sodium.crypto_sign_seed_keypair(seed);
+
+//     privateKey =
+//       keyPair.privateKey;
+
 //   }
+
+//   // OR full 64-byte private key
+//   else if (seed.length === 64) {
+
+//     privateKey = seed;
+
+//   }
+
+//   else {
+
+//     throw new Error(
+//       `Invalid private key length: ${seed.length}`
+//     );
+//   }
+
+//   const signatureBytes =
+//     sodium.crypto_sign_detached(
+//       sodium.from_string(signingString),
+//       privateKey
+//     );
+
+//   const signature =
+//     sodium.to_base64(
+//       signatureBytes,
+//       sodium.base64_variants.ORIGINAL
+//     );
+
+//   const keyId =
+//     `${env.ondc.subscriberId}` +
+//     `|${env.ondc.uniqueKeyId}` +
+//     `|ed25519`;
+
+//   const authHeader =
+//     `Signature ` +
+//     `keyId="${keyId}",` +
+//     `algorithm="ed25519",` +
+//     `created="${created}",` +
+//     `expires="${expires}",` +
+//     `headers="(created) (expires) digest",` +
+//     `signature="${signature}"`;
+
+//   console.log("AUTH HEADER:");
+//   console.log(authHeader);
+
+//   return authHeader;
 // }
 
 // export async function verifyAuthorizationHeader(
 //   authHeader: string | undefined,
 //   rawBody: string
 // ): Promise<boolean> {
-
 //   try {
-
 //     await sodium.ready;
 
 //     if (!authHeader) {
-
-//       console.error(
-//         "[ondc] Missing Authorization header"
-//       );
-
-//       return false;
-//     }
-
-//     const keyIdMatch =
-//       authHeader.match(/keyId="([^"]+)"/);
-
-//     const createdMatch =
-//       authHeader.match(/created="([^"]+)"/);
-
-//     const expiresMatch =
-//       authHeader.match(/expires="([^"]+)"/);
-
-//     const signatureMatch =
-//       authHeader.match(/signature="([^"]+)"/);
-
-//     if (
-//       !keyIdMatch ||
-//       !createdMatch ||
-//       !expiresMatch ||
-//       !signatureMatch
-//     ) {
-
-//       console.error(
-//         "[ondc] Invalid auth header"
-//       );
-
+//       console.error("[ondc] Missing auth header");
 //       return false;
 //     }
 
 //     const keyId =
-//       keyIdMatch[1];
+//       authHeader.match(/keyId="([^"]+)"/)?.[1];
 
 //     const created =
-//       createdMatch[1];
+//       authHeader.match(/created="([^"]+)"/)?.[1];
 
 //     const expires =
-//       expiresMatch[1];
+//       authHeader.match(/expires="([^"]+)"/)?.[1];
 
 //     const signature =
-//       signatureMatch[1];
+//       authHeader.match(/signature="([^"]+)"/)?.[1];
 
-//     const now =
-//       Math.floor(Date.now() / 1000);
-
-//     if (now > Number(expires)) {
-
-//       console.error(
-//         "[ondc] Signature expired"
-//       );
-
+//     if (
+//       !keyId ||
+//       !created ||
+//       !expires ||
+//       !signature
+//     ) {
+//       console.error("[ondc] Invalid auth header");
 //       return false;
 //     }
 
@@ -165,55 +225,30 @@
 //       await fetchPublicKey(subscriberId);
 
 //     if (!publicKey) {
-
-//       console.error(
-//         "[ondc] Public key missing"
-//       );
-
+//       console.error("[ondc] Public key missing");
 //       return false;
 //     }
-
-//     const publicKeyBytes =
-//       sodium.from_base64(
-//         publicKey,
-//         sodium.base64_variants.ORIGINAL
-//       );
-
-//     const signatureBytes =
-//       sodium.from_base64(
-//         signature,
-//         sodium.base64_variants.ORIGINAL
-//       );
 
 //     const verified =
 //       sodium.crypto_sign_verify_detached(
-//         signatureBytes,
-//         signingString,
-//         publicKeyBytes
+//         sodium.from_base64(
+//           signature,
+//           sodium.base64_variants.ORIGINAL
+//         ),
+//         // signingString,
+//         sodium.from_string(signingString),
+//         sodium.from_base64(
+//           publicKey,
+//           sodium.base64_variants.ORIGINAL
+//         )
 //       );
 
-//     if (!verified) {
+//     console.log("VERIFIED:", verified);
 
-//       console.error(
-//         "[ondc] Signature verification failed"
-//       );
-
-//       return false;
-//     }
-
-//     console.log(
-//       "[ondc] Signature verified"
-//     );
-
-//     return true;
+//     return verified;
 
 //   } catch (err) {
-
-//     console.error(
-//       "[ondc] Verification error",
-//       err
-//     );
-
+//     console.error(err);
 //     return false;
 //   }
 // }
@@ -257,22 +292,54 @@ export async function createAuthorizationHeader(
   console.log("SIGNING STRING:");
   console.log(signingString);
 
-  const privateKey =
+  console.log(
+    "SUBSCRIBER ID:",
+    env.ondc.subscriberId
+  );
+
+  console.log(
+    "UKID:",
+    env.ondc.uniqueKeyId
+  );
+
+  const seedOrKey =
     sodium.from_base64(
       env.ondc.signingPrivateKey,
       sodium.base64_variants.ORIGINAL
     );
 
   console.log(
-    "PRIVATE KEY LENGTH:",
-    privateKey.length
+    "KEY LENGTH:",
+    seedOrKey.length
   );
 
-  // const signatureBytes =
-  //   sodium.crypto_sign_detached(
-  //     signingString,
-  //     privateKey
-  //   );
+  let privateKey: Uint8Array;
+
+  // 32 byte seed
+  if (seedOrKey.length === 32) {
+
+    const keyPair =
+      sodium.crypto_sign_seed_keypair(
+        seedOrKey
+      );
+
+    privateKey =
+      keyPair.privateKey;
+  }
+
+  // 64 byte private key
+  else if (seedOrKey.length === 64) {
+
+    privateKey =
+      seedOrKey;
+  }
+
+  else {
+
+    throw new Error(
+      `Invalid key length: ${seedOrKey.length}`
+    );
+  }
 
   const signatureBytes =
     sodium.crypto_sign_detached(
@@ -310,25 +377,39 @@ export async function verifyAuthorizationHeader(
   authHeader: string | undefined,
   rawBody: string
 ): Promise<boolean> {
+
   try {
+
     await sodium.ready;
 
     if (!authHeader) {
-      console.error("[ondc] Missing auth header");
+
+      console.error(
+        "[ondc] Missing auth header"
+      );
+
       return false;
     }
 
     const keyId =
-      authHeader.match(/keyId="([^"]+)"/)?.[1];
+      authHeader.match(
+        /keyId="([^"]+)"/
+      )?.[1];
 
     const created =
-      authHeader.match(/created="([^"]+)"/)?.[1];
+      authHeader.match(
+        /created="([^"]+)"/
+      )?.[1];
 
     const expires =
-      authHeader.match(/expires="([^"]+)"/)?.[1];
+      authHeader.match(
+        /expires="([^"]+)"/
+      )?.[1];
 
     const signature =
-      authHeader.match(/signature="([^"]+)"/)?.[1];
+      authHeader.match(
+        /signature="([^"]+)"/
+      )?.[1];
 
     if (
       !keyId ||
@@ -336,7 +417,11 @@ export async function verifyAuthorizationHeader(
       !expires ||
       !signature
     ) {
-      console.error("[ondc] Invalid auth header");
+
+      console.error(
+        "[ondc] Invalid auth header"
+      );
+
       return false;
     }
 
@@ -348,14 +433,33 @@ export async function verifyAuthorizationHeader(
       `(expires): ${expires}\n` +
       `digest: ${digest}`;
 
-    const subscriberId =
-      keyId.split("|")[0];
+    const [
+      subscriberId,
+      uniqueKeyId
+    ] = keyId.split("|");
+
+    console.log(
+      "VERIFY SUBSCRIBER:",
+      subscriberId
+    );
+
+    console.log(
+      "VERIFY UKID:",
+      uniqueKeyId
+    );
 
     const publicKey =
-      await fetchPublicKey(subscriberId);
+      await fetchPublicKey(
+        subscriberId,
+        uniqueKeyId
+      );
 
     if (!publicKey) {
-      console.error("[ondc] Public key missing");
+
+      console.error(
+        "[ondc] Public key missing"
+      );
+
       return false;
     }
 
@@ -365,7 +469,6 @@ export async function verifyAuthorizationHeader(
           signature,
           sodium.base64_variants.ORIGINAL
         ),
-        // signingString,
         sodium.from_string(signingString),
         sodium.from_base64(
           publicKey,
@@ -373,12 +476,17 @@ export async function verifyAuthorizationHeader(
         )
       );
 
-    console.log("VERIFIED:", verified);
+    console.log(
+      "VERIFIED:",
+      verified
+    );
 
     return verified;
 
   } catch (err) {
+
     console.error(err);
+
     return false;
   }
 }

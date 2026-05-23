@@ -56,20 +56,6 @@ export function replyContext(
   };
 }
 
-// export function callbackUrl(bapUri: string, action: string): string {
-//   const base = bapUri.replace(/\/$/, "");
-//   return `${base}/${action}`;
-// }
-
-// export function callbackUrl(
-//   bapUri: string,
-//   action: string
-// ): string {
-//   const base = bapUri.replace(/\/$/, "");
-
-//   return `${base}/on_${action.replace("on_", "")}`;
-// }
-
 
 export function callbackUrl(
   bapUri: string,

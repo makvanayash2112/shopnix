@@ -24,9 +24,12 @@ export async function postToBap(
       payload,
     }).catch(() => undefined);
 
-    // const authHeader =
-    //   await createAuthorizationHeader(payload);
-      
+    const body =
+      JSON.stringify(payload);
+
+    const authHeader =
+      await createAuthorizationHeader(body);
+
     console.log(`[ONDC] Sending ${action} → ${url}`);
 
     const response = await axios.post(
@@ -35,7 +38,7 @@ export async function postToBap(
       {
         headers: {
           "Content-Type": "application/json",
-          // Authorization: authHeader,
+          "Authorization": authHeader,
         },
         timeout: 60000,
       }
