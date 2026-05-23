@@ -51,11 +51,21 @@ export function replyContext(
     transaction_id: incoming.transaction_id,
     message_id: uuidv4(),
     timestamp: new Date().toISOString(),
-    ttl: incoming.ttl || "PT30S",
+    // ttl: incoming.ttl || "PT30S",
+    ttl: "PT30S",
   };
 }
 
-export function callbackUrl(bapUri: string, action: string): string {
+// export function callbackUrl(bapUri: string, action: string): string {
+//   const base = bapUri.replace(/\/$/, "");
+//   return `${base}/${action}`;
+// }
+
+export function callbackUrl(
+  bapUri: string,
+  action: string
+): string {
   const base = bapUri.replace(/\/$/, "");
-  return `${base}/${action}`;
+
+  return `${base}/on_${action.replace("on_", "")}`;
 }

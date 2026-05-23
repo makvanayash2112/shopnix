@@ -9,33 +9,44 @@ export async function postToBap(
   action: string,
   message: Record<string, unknown>
 ) {
-  const url = callbackUrl(context.bap_uri, action);
-  const payload = { context, message };
-
-  await OndcLog.create({
-    action,
-    transactionId: context.transaction_id,
-    direction: "outgoing",
-    payload,
-  }).catch(() => undefined);
-
   try {
-    // const authHeader = await createAuthorizationHeader(payload);
-    const authHeader = null;
+    const url = callbackUrl(context.bap_uri, action);
 
-    console.log(`[ondc] Sending ${action} to ${url}...`);
-    console.log(`[ondc] Payload:`, JSON.stringify(payload, null, 2));
+    const payload = {
+      context,
+      message,
+    };
 
-    const response = await axios.post(url, payload, {
-      headers: {
-        "Content-Type": "application/json"
-        // ...(authHeader ? { Authorization: authHeader } : {})
-      },
-      timeout: 15000,
-    });
+    await OndcLog.create({
+      action,
+      transactionId: context.transaction_id,
+      direction: "outgoing",
+      payload,
+    }).catch(() => undefined);
 
-    console.log(`[ondc] Success: Pramaan returned status ${response.status}`);
+    const authHeader = await createAuthorizationHeader(payload);
+
+    console.log(`[ONDC] Sending ${action} → ${url}`);
+
+    const response = await axios.post(
+      url,
+      payload,
+      {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: authHeader,
+        },
+        timeout: 60000,
+      }
+    );
+
+    console.log(`[ONDC] ${action} success`, response.status);
+
+    return response.data;
   } catch (err: any) {
-    console.error(`[ondc] Failed POST ${url}`, err?.response?.data || err.message);
+    console.error(
+      `[ONDC] ${action} failed`,
+      err?.response?.data || err.message
+    );
   }
 }

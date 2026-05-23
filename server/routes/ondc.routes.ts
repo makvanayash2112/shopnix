@@ -85,7 +85,7 @@ router.post("/search", async (req, res) => {
 
   try {
     console.log("========== SEARCH REQUEST ==========");
-    console.log(JSON.stringify(body, null, 2));
+    // console.log(JSON.stringify(body, null, 2));
 
     const { seller, products } = await getPublishedCatalog();
 
@@ -109,8 +109,11 @@ router.post("/search", async (req, res) => {
     );
 
     console.log("CATALOG MESSAGE:");
-    console.log(JSON.stringify(message, null, 2));
-
+    // console.log(JSON.stringify(message, null, 2));
+    // console.log(JSON.stringify(body, null, 2));
+    console.log(
+      `[ONDC SEARCH] products=${products.length}`
+    );
     console.log("CALLING BAP CALLBACK...");
 
     const response = await postToBap(
@@ -129,9 +132,10 @@ router.post("/search", async (req, res) => {
 
 router.post("/select", async (req, res) => {
 
+
   const body = req.body as BecknBody;
 
-
+  ack(res);
   try {
     console.log("SELECT REQUEST:");
     console.log(JSON.stringify(body, null, 2));
@@ -174,11 +178,11 @@ router.post("/select", async (req, res) => {
   } catch (err) {
     console.error("[select] Error:", err);
   }
-  ack(res);
 });
 
 router.post("/init", async (req, res) => {
   const body = req.body as BecknBody;
+   ack(res);
   try {
     console.log("INIT REQUEST:");
     console.log(JSON.stringify(body, null, 2));
@@ -198,11 +202,11 @@ router.post("/init", async (req, res) => {
   } catch (err) {
     console.error("[init] Error:", err);
   }
-  ack(res);
 });
 
 router.post("/confirm", async (req, res) => {
   const body = req.body as BecknBody;
+   ack(res);
   try {
     console.log("CONFIRM REQUEST:");
     console.log(JSON.stringify(body, null, 2));
@@ -222,7 +226,6 @@ router.post("/confirm", async (req, res) => {
   } catch (err) {
     console.error("[confirm] Error:", err);
   }
-  ack(res);
 });
 
 router.post("/status", async (req, res) => {

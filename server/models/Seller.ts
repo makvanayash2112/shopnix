@@ -4,6 +4,7 @@ export interface ISeller extends Document {
   storeName: string;
   storeDescription?: string;
   gstin?: string;
+  ondcProviderId?: string;
   pan?: string;
   email: string;
   phone?: string;
@@ -52,6 +53,11 @@ const sellerSchema = new Schema<ISeller>(
       city: { type: String, default: "std:080" },
       isActive: { type: Boolean, default: true },
       subscriberId: String,
+
+    },
+    ondcProviderId: {
+      type: String,
+      unique: true,
     },
     fulfillment: {
       type: {

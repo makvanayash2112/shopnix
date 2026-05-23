@@ -25,6 +25,8 @@ export const env = {
     country: process.env.ONDC_COUNTRY || "IND",
     signingPrivateKey: process.env.ONDC_SIGNING_PRIVATE_KEY || "",
     subscriberId: process.env.ONDC_SUBSCRIBER_ID || "",
+    uniqueKeyId: process.env.ONDC_UNIQUE_KEY_ID || "",
+
   },
   defaultStoreName: process.env.DEFAULT_STORE_NAME || "Shopnix Store",
   defaultStoreGstin: process.env.DEFAULT_STORE_GSTIN || "",
