@@ -46,7 +46,7 @@ export async function fetchPublicKey(
         const response =
             await axios.post(
                 REGISTRY_URL,
-                payload,
+                body,
                 {
                     headers: {
                         "Content-Type":
