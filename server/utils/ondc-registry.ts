@@ -22,7 +22,7 @@ export async function fetchPublicKey(
         };
 
         if (uniqueKeyId) {
-            payload.ukId = uniqueKeyId;
+            payload.unique_key_id = uniqueKeyId;
         }
 
         const body =
