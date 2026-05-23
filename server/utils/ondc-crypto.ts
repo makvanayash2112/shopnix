@@ -268,9 +268,15 @@ export async function createAuthorizationHeader(
     privateKey.length
   );
 
+  // const signatureBytes =
+  //   sodium.crypto_sign_detached(
+  //     signingString,
+  //     privateKey
+  //   );
+
   const signatureBytes =
     sodium.crypto_sign_detached(
-      signingString,
+      sodium.from_string(signingString),
       privateKey
     );
 
@@ -359,7 +365,8 @@ export async function verifyAuthorizationHeader(
           signature,
           sodium.base64_variants.ORIGINAL
         ),
-        signingString,
+        // signingString,
+        sodium.from_string(signingString),
         sodium.from_base64(
           publicKey,
           sodium.base64_variants.ORIGINAL
