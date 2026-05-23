@@ -51,7 +51,7 @@ export async function createAuthorizationHeader(
   const seedOrKey =
     sodium.from_base64(
       env.ondc.signingPrivateKey,
-      sodium.base64_variants.ORIGINAL
+      sodium.base64_variants.ORIGINAL_NO_PADDING
     );
 
   console.log(
@@ -96,7 +96,7 @@ export async function createAuthorizationHeader(
   const signature =
     sodium.to_base64(
       signatureBytes,
-      sodium.base64_variants.ORIGINAL
+      sodium.base64_variants.ORIGINAL_NO_PADDING
     );
 
   const keyId =
@@ -213,12 +213,12 @@ export async function verifyAuthorizationHeader(
       sodium.crypto_sign_verify_detached(
         sodium.from_base64(
           signature,
-          sodium.base64_variants.ORIGINAL
+          sodium.base64_variants.ORIGINAL_NO_PADDING
         ),
         sodium.from_string(signingString),
         sodium.from_base64(
           publicKey,
-          sodium.base64_variants.ORIGINAL
+          sodium.base64_variants.ORIGINAL_NO_PADDING
         )
       );
 

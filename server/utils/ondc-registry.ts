@@ -25,6 +25,11 @@ export async function fetchPublicKey(
             payload.unique_key_id = uniqueKeyId;
         }
 
+        console.log(
+            "[ondc-registry] Payload:",
+            payload
+        );
+
         const body =
             JSON.stringify(payload);
 
@@ -54,6 +59,20 @@ export async function fetchPublicKey(
 
         const data =
             response.data;
+
+            console.log(
+                "[ondc-registry] Lookup successful"
+            );
+            console.log(
+                "Status:",
+                response.status
+            );
+            console.log(
+                "Data:",
+                data
+            );
+
+            console.log("RESPONSE:",response);
 
         console.log(
             "REGISTRY RESPONSE:"
