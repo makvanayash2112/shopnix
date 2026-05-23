@@ -64,11 +64,11 @@ export async function sendToBpp(
   }).catch(() => undefined);
 
   try {
-    const authHeader = await createAuthorizationHeader(payload);
+    // const authHeader = await createAuthorizationHeader(payload);
     const res = await axios.post(url, payload, {
       headers: { 
         "Content-Type": "application/json",
-        ...(authHeader ? { Authorization: authHeader } : {})
+        // ...(authHeader ? { Authorization: authHeader } : {})
       },
       timeout: 15000,
     });
