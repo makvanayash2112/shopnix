@@ -3,37 +3,33 @@ import crypto from "crypto";
 import { env } from "../config/env";
 import { fetchPublicKey } from "./ondc-registry";
 
+function createDigest(body: string) {
+
+  const hash = crypto
+    .createHash("sha256")
+    .update(body)
+    .digest("base64");
+
+  return `SHA-256=${hash}`;
+}
+
 export async function createAuthorizationHeader(
   payload: Record<string, unknown>
 ): Promise<string> {
 
   await sodium.ready;
 
-  if (
-    !env.ondc.signingPrivateKey ||
-    !env.ondc.subscriberId ||
-    !env.ondc.uniqueKeyId
-  ) {
-    console.warn(
-      "[ondc-crypto] Missing ONDC credentials"
-    );
+  const created =
+    Math.floor(Date.now() / 1000);
 
-    return "";
-  }
+  const expires =
+    created + 300;
 
-  const created = Math.floor(Date.now() / 1000);
+  const body =
+    JSON.stringify(payload);
 
-  const expires = created + 300;
-
-  const body = JSON.stringify(payload);
-
-  // SHA256 DIGEST
-  const digestHash = crypto
-    .createHash("sha256")
-    .update(body)
-    .digest("base64");
-
-  const digest = `SHA-256=${digestHash}`;
+  const digest =
+    createDigest(body);
 
   const signingString =
     `(created): ${created}\n` +
@@ -78,7 +74,7 @@ export async function createAuthorizationHeader(
   } catch (err) {
 
     console.error(
-      "[ondc-crypto] Signature error",
+      "[ondc] Signature creation failed",
       err
     );
 
@@ -88,7 +84,7 @@ export async function createAuthorizationHeader(
 
 export async function verifyAuthorizationHeader(
   authHeader: string | undefined,
-  payload: Record<string, unknown>
+  rawBody: string
 ): Promise<boolean> {
 
   try {
@@ -96,14 +92,13 @@ export async function verifyAuthorizationHeader(
     await sodium.ready;
 
     if (!authHeader) {
+
       console.error(
-        "[ondc-crypto] Missing Authorization header"
+        "[ondc] Missing Authorization header"
       );
 
       return false;
     }
-
-    // Parse Authorization Header
 
     const keyIdMatch =
       authHeader.match(/keyId="([^"]+)"/);
@@ -125,22 +120,23 @@ export async function verifyAuthorizationHeader(
     ) {
 
       console.error(
-        "[ondc-crypto] Invalid auth header format"
+        "[ondc] Invalid auth header"
       );
 
       return false;
     }
 
-    const keyId = keyIdMatch[1];
+    const keyId =
+      keyIdMatch[1];
 
-    const created = createdMatch[1];
+    const created =
+      createdMatch[1];
 
-    const expires = expiresMatch[1];
+    const expires =
+      expiresMatch[1];
 
-    const signatureBase64 =
+    const signature =
       signatureMatch[1];
-
-    // Check expiry
 
     const now =
       Math.floor(Date.now() / 1000);
@@ -148,38 +144,22 @@ export async function verifyAuthorizationHeader(
     if (now > Number(expires)) {
 
       console.error(
-        "[ondc-crypto] Signature expired"
+        "[ondc] Signature expired"
       );
 
       return false;
     }
 
-    // Generate digest
-
-    const body =
-      JSON.stringify(payload);
-
-    const digestHash = crypto
-      .createHash("sha256")
-      .update(body)
-      .digest("base64");
-
     const digest =
-      `SHA-256=${digestHash}`;
-
-    // Recreate signing string
+      createDigest(rawBody);
 
     const signingString =
       `(created): ${created}\n` +
       `(expires): ${expires}\n` +
       `digest: ${digest}`;
 
-    // Extract subscriber ID
-
     const subscriberId =
       keyId.split("|")[0];
-
-    // Fetch public key
 
     const publicKey =
       await fetchPublicKey(subscriberId);
@@ -187,13 +167,11 @@ export async function verifyAuthorizationHeader(
     if (!publicKey) {
 
       console.error(
-        "[ondc-crypto] Public key not found"
+        "[ondc] Public key missing"
       );
 
       return false;
     }
-
-    // Verify signature
 
     const publicKeyBytes =
       sodium.from_base64(
@@ -203,7 +181,7 @@ export async function verifyAuthorizationHeader(
 
     const signatureBytes =
       sodium.from_base64(
-        signatureBase64,
+        signature,
         sodium.base64_variants.ORIGINAL
       );
 
@@ -217,14 +195,14 @@ export async function verifyAuthorizationHeader(
     if (!verified) {
 
       console.error(
-        "[ondc-crypto] Signature verification failed"
+        "[ondc] Signature verification failed"
       );
 
       return false;
     }
 
     console.log(
-      "[ondc-crypto] Signature verified"
+      "[ondc] Signature verified"
     );
 
     return true;
@@ -232,7 +210,7 @@ export async function verifyAuthorizationHeader(
   } catch (err) {
 
     console.error(
-      "[ondc-crypto] Verification error",
+      "[ondc] Verification error",
       err
     );
 
