@@ -15,6 +15,111 @@ function createDigest(body: string) {
   return `SHA-256=${hash}`;
 }
 
+// export async function createAuthorizationHeader(
+//   body: string
+// ): Promise<string> {
+
+//   await sodium.ready;
+
+//   const created =
+//     Math.floor(Date.now() / 1000);
+
+//   const expires =
+//     created + 300;
+
+//   const digest =
+//     createDigest(body);
+
+//   const signingString =
+//     `(created): ${created}\n` +
+//     `(expires): ${expires}\n` +
+//     `digest: ${digest}`;
+
+//   console.log("SIGNING STRING:");
+//   console.log(signingString);
+
+//   console.log(
+//     "SUBSCRIBER ID:",
+//     env.ondc.subscriberId
+//   );
+
+//   console.log(
+//     "UKID:",
+//     env.ondc.uniqueKeyId
+//   );
+
+//   const seedOrKey =
+//     sodium.from_base64(
+//       env.ondc.signingPrivateKey,
+//       sodium.base64_variants.ORIGINAL
+//     );
+
+//   console.log(
+//     "KEY LENGTH:",
+//     seedOrKey.length
+//   );
+
+//   let privateKey: Uint8Array;
+
+//   // 32 byte seed
+//   if (seedOrKey.length === 32) {
+
+//     const keyPair =
+//       sodium.crypto_sign_seed_keypair(
+//         seedOrKey
+//       );
+
+//     privateKey =
+//       keyPair.privateKey;
+//   }
+
+//   // 64 byte private key
+//   else if (seedOrKey.length === 64) {
+
+//     privateKey =
+//       seedOrKey;
+//   }
+
+//   else {
+
+//     throw new Error(
+//       `Invalid key length: ${seedOrKey.length}`
+//     );
+//   }
+
+//   const signatureBytes =
+//     sodium.crypto_sign_detached(
+//       sodium.from_string(signingString),
+//       privateKey
+//     );
+
+//   const signature =
+//     sodium.to_base64(
+//       signatureBytes,
+//       sodium.base64_variants.ORIGINAL
+//     );
+
+//   const keyId =
+//     `${env.ondc.subscriberId}` +
+//     `|${env.ondc.uniqueKeyId}` +
+//     `|ed25519`;
+
+//   const authHeader =
+//     `Signature ` +
+//     `keyId="${keyId}",` +
+//     `algorithm="ed25519",` +
+//     `created="${created}",` +
+//     `expires="${expires}",` +
+//     `headers="(created) (expires) digest",` +
+//     `signature="${signature}"`;
+
+//   console.log("AUTH HEADER:");
+//   console.log(authHeader);
+
+//   return authHeader;
+// }
+
+
 export async function createAuthorizationHeader(
   body: string
 ): Promise<string> {
@@ -38,52 +143,20 @@ export async function createAuthorizationHeader(
   console.log("SIGNING STRING:");
   console.log(signingString);
 
-  console.log(
-    "SUBSCRIBER ID:",
-    env.ondc.subscriberId
-  );
-
-  console.log(
-    "UKID:",
-    env.ondc.uniqueKeyId
-  );
-
-  const seedOrKey =
+  const privateKey =
     sodium.from_base64(
       env.ondc.signingPrivateKey,
       sodium.base64_variants.ORIGINAL
     );
 
   console.log(
-    "KEY LENGTH:",
-    seedOrKey.length
+    "PRIVATE KEY LENGTH:",
+    privateKey.length
   );
 
-  let privateKey: Uint8Array;
-
-  // 32 byte seed
-  if (seedOrKey.length === 32) {
-
-    const keyPair =
-      sodium.crypto_sign_seed_keypair(
-        seedOrKey
-      );
-
-    privateKey =
-      keyPair.privateKey;
-  }
-
-  // 64 byte private key
-  else if (seedOrKey.length === 64) {
-
-    privateKey =
-      seedOrKey;
-  }
-
-  else {
-
+  if (privateKey.length !== 64) {
     throw new Error(
-      `Invalid key length: ${seedOrKey.length}`
+      `ONDC private key must be 64 bytes. Current: ${privateKey.length}`
     );
   }
 
@@ -93,10 +166,25 @@ export async function createAuthorizationHeader(
       privateKey
     );
 
+    console.log(
+      "SIGNATURE BYTES LENGTH:",
+      signatureBytes.length
+    );
+
   const signature =
     sodium.to_base64(
       signatureBytes,
       sodium.base64_variants.ORIGINAL
+    );
+
+    console.log(
+      "SIGNATURE LENGTH:",
+      signature.length
+    );
+
+    console.log(
+      "SIGNATURE:",
+      signature
     );
 
   const keyId =
@@ -118,6 +206,7 @@ export async function createAuthorizationHeader(
 
   return authHeader;
 }
+
 
 export async function verifyAuthorizationHeader(
   authHeader: string | undefined,
