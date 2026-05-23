@@ -224,22 +224,14 @@ import crypto from "crypto";
 import { env } from "../config/env";
 import { fetchPublicKey } from "./ondc-registry";
 
-function createDigest(payload: unknown) {
-
-  const body =
-    typeof payload === "string"
-      ? payload
-      : JSON.stringify(payload);
+function createDigest(body: string) {
 
   const hash = crypto
     .createHash("sha256")
     .update(body)
     .digest("base64");
 
-  return {
-    body,
-    digest: `SHA-256=${hash}`,
-  };
+  return `SHA-256=${hash}`;
 }
 
 export async function createAuthorizationHeader(
@@ -265,24 +257,21 @@ export async function createAuthorizationHeader(
   console.log("SIGNING STRING:");
   console.log(signingString);
 
-  // IMPORTANT
-  // ONDC private key is usually 32-byte seed
-
-  const seed =
+  const privateKey =
     sodium.from_base64(
       env.ondc.signingPrivateKey,
       sodium.base64_variants.ORIGINAL
     );
 
-  console.log("SEED LENGTH:", seed.length);
-
-  const keyPair =
-    sodium.crypto_sign_seed_keypair(seed);
+  console.log(
+    "PRIVATE KEY LENGTH:",
+    privateKey.length
+  );
 
   const signatureBytes =
     sodium.crypto_sign_detached(
       signingString,
-      keyPair.privateKey
+      privateKey
     );
 
   const signature =
@@ -310,238 +299,6 @@ export async function createAuthorizationHeader(
 
   return authHeader;
 }
-
-
-// export async function createAuthorizationHeader(
-//   payload: unknown
-//   // rawBody: string
-// ): Promise<string> {
-
-//   await sodium.ready;
-
-//   if (
-//     !env.ondc.signingPrivateKey ||
-//     !env.ondc.subscriberId ||
-//     !env.ondc.uniqueKeyId
-//   ) {
-
-//     console.error(
-//       "[ondc] Missing ONDC env values"
-//     );
-
-//     return "";
-//   }
-
-//   const created =
-//     Math.floor(Date.now() / 1000);
-
-//   const expires =
-//     created + 300;
-
-//   const { digest } =
-//     createDigest(payload);
-
-//   const signingString =
-//     `(created): ${created}\n` +
-//     `(expires): ${expires}\n` +
-//     `digest: ${digest}`;
-
-//   try {
-
-//     const privateKey =
-//       sodium.from_base64(
-//         env.ondc.signingPrivateKey,
-//         sodium.base64_variants.ORIGINAL
-//       );
-
-//     const seed = sodium.from_base64(
-//       env.ondc.signingPrivateKey,
-//       sodium.base64_variants.ORIGINAL
-//     );
-
-//     const keyPair =
-//       sodium.crypto_sign_seed_keypair(seed);
-
-//     // const signatureBytes =
-//     //   sodium.crypto_sign_detached(
-//     //     signingString,
-//     //     privateKey
-//     //   );
-
-
-//     const signatureBytes =
-//       sodium.crypto_sign_detached(
-//         signingString,
-//         keyPair.privateKey
-//       );
-
-//     const signature =
-//       sodium.to_base64(
-//         signatureBytes,
-//         sodium.base64_variants.ORIGINAL
-//       );
-
-//     const keyId =
-//       `${env.ondc.subscriberId}` +
-//       `|${env.ondc.uniqueKeyId}` +
-//       `|ed25519`;
-
-//     return (
-//       `Signature ` +
-//       `keyId="${keyId}",` +
-//       `algorithm="ed25519",` +
-//       `created="${created}",` +
-//       `expires="${expires}",` +
-//       `headers="(created) (expires) digest",` +
-//       `signature="${signature}"`
-//     );
-
-//   } catch (err) {
-
-//     console.error(
-//       "[ondc] Signature generation failed",
-//       err
-//     );
-
-//     return "";
-//   }
-// }
-
-// export async function verifyAuthorizationHeader(
-//   authHeader: string | undefined,
-//   // payload: unknown
-//   rawBody: string
-// ): Promise<boolean> {
-
-//   try {
-
-//     await sodium.ready;
-
-//     if (!authHeader) {
-
-//       console.error(
-//         "[ondc] Missing auth header"
-//       );
-
-//       return false;
-//     }
-
-//     const keyIdMatch =
-//       authHeader.match(/keyId="([^"]+)"/);
-
-//     const createdMatch =
-//       authHeader.match(/created="([^"]+)"/);
-
-//     const expiresMatch =
-//       authHeader.match(/expires="([^"]+)"/);
-
-//     const signatureMatch =
-//       authHeader.match(/signature="([^"]+)"/);
-
-//     if (
-//       !keyIdMatch ||
-//       !createdMatch ||
-//       !expiresMatch ||
-//       !signatureMatch
-//     ) {
-
-//       console.error(
-//         "[ondc] Invalid auth header"
-//       );
-
-//       return false;
-//     }
-
-//     const keyId =
-//       keyIdMatch[1];
-
-//     const created =
-//       createdMatch[1];
-
-//     const expires =
-//       expiresMatch[1];
-
-//     const signatureBase64 =
-//       signatureMatch[1];
-
-//     const now =
-//       Math.floor(Date.now() / 1000);
-
-//     if (now > Number(expires)) {
-
-//       console.error(
-//         "[ondc] Signature expired"
-//       );
-
-//       return false;
-//     }
-
-//     // const { digest } =
-//     //   createDigest(payload);
-
-//     const digest =
-//       createDigest(rawBody).digest;
-
-//     const signingString =
-//       `(created): ${created}\n` +
-//       `(expires): ${expires}\n` +
-//       `digest: ${digest}`;
-
-//     const subscriberId =
-//       keyId.split("|")[0];
-
-//     const publicKey =
-//       await fetchPublicKey(subscriberId);
-
-//     if (!publicKey) {
-//       console.error(`[ondc] Public key not found for subscriber: ${subscriberId}`);
-//       return false;
-//     }
-
-//     const publicKeyBytes =
-//       sodium.from_base64(
-//         publicKey,
-//         sodium.base64_variants.ORIGINAL
-//       );
-
-//     const signatureBytes =
-//       sodium.from_base64(
-//         signatureBase64,
-//         sodium.base64_variants.ORIGINAL
-//       );
-
-//     const verified =
-//       sodium.crypto_sign_verify_detached(
-//         signatureBytes,
-//         signingString,
-//         publicKeyBytes
-//       );
-
-//     if (!verified) {
-
-//       console.error(
-//         "[ondc] Signature verification failed"
-//       );
-
-//       return false;
-//     }
-
-//     console.log(
-//       "[ondc] Signature verified"
-//     );
-
-//     return true;
-
-//   } catch (err) {
-
-//     console.error(
-//       "[ondc] Verification error",
-//       err
-//     );
-
-//     return false;
-//   }
-// }
 
 export async function verifyAuthorizationHeader(
   authHeader: string | undefined,
@@ -578,7 +335,7 @@ export async function verifyAuthorizationHeader(
     }
 
     const digest =
-      createDigest(rawBody).digest;
+      createDigest(rawBody);
 
     const signingString =
       `(created): ${created}\n` +
