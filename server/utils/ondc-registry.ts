@@ -262,12 +262,6 @@ export async function fetchPublicKey(
         );
 
 
-
-
-
-        
-
-
         const data = response.data;
 
         if (Array.isArray(data) && data.length > 0) {
