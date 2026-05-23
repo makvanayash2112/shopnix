@@ -7,7 +7,7 @@ import type {
 import { OndcLog } from "../models/OndcLog";
 
 import { buildNackResponse }
-from "../utils/beckn";
+  from "../utils/beckn";
 
 import {
   verifyAuthorizationHeader,
@@ -64,9 +64,14 @@ export async function logOndcIncoming(
       req.headers.authorization;
 
     const verified =
+      // await verifyAuthorizationHeader(
+      //   authHeader,
+      //   req.body
+      // );
+
       await verifyAuthorizationHeader(
         authHeader,
-        req.body
+        (req as any).rawBody
       );
 
     if (!verified) {

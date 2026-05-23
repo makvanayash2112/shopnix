@@ -61,11 +61,23 @@ export function replyContext(
 //   return `${base}/${action}`;
 // }
 
+// export function callbackUrl(
+//   bapUri: string,
+//   action: string
+// ): string {
+//   const base = bapUri.replace(/\/$/, "");
+
+//   return `${base}/on_${action.replace("on_", "")}`;
+// }
+
+
 export function callbackUrl(
   bapUri: string,
   action: string
 ): string {
-  const base = bapUri.replace(/\/$/, "");
 
-  return `${base}/on_${action.replace("on_", "")}`;
+  const base =
+    bapUri.replace(/\/$/, "");
+
+  return `${base}/${action}`;
 }

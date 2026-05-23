@@ -29,7 +29,15 @@ export function createApp() {
     })
   );
 
-  app.use(express.json({ limit: "2mb" }));
+  // app.use(express.json({ limit: "2mb" }));
+  app.use(
+    express.json({
+      verify: (req: any, res, buf) => {
+        req.rawBody = buf.toString();
+      },
+      limit: "2mb",
+    })
+  );
   app.use(express.urlencoded({ extended: true }));
 
   // Global Request & Response Logger (Logs all steps, payloads, success/errors for ALL APIs)

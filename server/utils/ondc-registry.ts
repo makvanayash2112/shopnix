@@ -226,9 +226,9 @@ export async function fetchPublicKey(
     subscriberId: string
 ): Promise<string | null> {
 
-    const httpsAgent = new https.Agent({
-        rejectUnauthorized: false
-    });
+    // const httpsAgent = new https.Agent({
+    //     rejectUnauthorized: false
+    // });
 
     try {
         console.log(`[ondc-registry] Looking up: ${subscriberId}`);
@@ -236,6 +236,7 @@ export async function fetchPublicKey(
         // Create payload for registry lookup
         const payload = {
             subscriber_id: subscriberId,
+            country: "IND",
             // You can add "domain": "ONDC:RET10" if needed
         };
 
@@ -251,7 +252,7 @@ export async function fetchPublicKey(
             REGISTRY_URL,
             payload,
             {
-                httpsAgent,
+                // httpsAgent,
                 timeout: 15000,
                 headers: {
                     "Content-Type": "application/json",

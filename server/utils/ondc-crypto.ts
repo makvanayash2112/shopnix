@@ -244,6 +244,7 @@ function createDigest(payload: unknown) {
 
 export async function createAuthorizationHeader(
   payload: unknown
+  // rawBody: string
 ): Promise<string> {
 
   await sodium.ready;
@@ -321,76 +322,178 @@ export async function createAuthorizationHeader(
   }
 }
 
+// export async function verifyAuthorizationHeader(
+//   authHeader: string | undefined,
+//   // payload: unknown
+//   rawBody: string
+// ): Promise<boolean> {
+
+//   try {
+
+//     await sodium.ready;
+
+//     if (!authHeader) {
+
+//       console.error(
+//         "[ondc] Missing auth header"
+//       );
+
+//       return false;
+//     }
+
+//     const keyIdMatch =
+//       authHeader.match(/keyId="([^"]+)"/);
+
+//     const createdMatch =
+//       authHeader.match(/created="([^"]+)"/);
+
+//     const expiresMatch =
+//       authHeader.match(/expires="([^"]+)"/);
+
+//     const signatureMatch =
+//       authHeader.match(/signature="([^"]+)"/);
+
+//     if (
+//       !keyIdMatch ||
+//       !createdMatch ||
+//       !expiresMatch ||
+//       !signatureMatch
+//     ) {
+
+//       console.error(
+//         "[ondc] Invalid auth header"
+//       );
+
+//       return false;
+//     }
+
+//     const keyId =
+//       keyIdMatch[1];
+
+//     const created =
+//       createdMatch[1];
+
+//     const expires =
+//       expiresMatch[1];
+
+//     const signatureBase64 =
+//       signatureMatch[1];
+
+//     const now =
+//       Math.floor(Date.now() / 1000);
+
+//     if (now > Number(expires)) {
+
+//       console.error(
+//         "[ondc] Signature expired"
+//       );
+
+//       return false;
+//     }
+
+//     // const { digest } =
+//     //   createDigest(payload);
+
+//     const digest =
+//       createDigest(rawBody).digest;
+
+//     const signingString =
+//       `(created): ${created}\n` +
+//       `(expires): ${expires}\n` +
+//       `digest: ${digest}`;
+
+//     const subscriberId =
+//       keyId.split("|")[0];
+
+//     const publicKey =
+//       await fetchPublicKey(subscriberId);
+
+//     if (!publicKey) {
+//       console.error(`[ondc] Public key not found for subscriber: ${subscriberId}`);
+//       return false;
+//     }
+
+//     const publicKeyBytes =
+//       sodium.from_base64(
+//         publicKey,
+//         sodium.base64_variants.ORIGINAL
+//       );
+
+//     const signatureBytes =
+//       sodium.from_base64(
+//         signatureBase64,
+//         sodium.base64_variants.ORIGINAL
+//       );
+
+//     const verified =
+//       sodium.crypto_sign_verify_detached(
+//         signatureBytes,
+//         signingString,
+//         publicKeyBytes
+//       );
+
+//     if (!verified) {
+
+//       console.error(
+//         "[ondc] Signature verification failed"
+//       );
+
+//       return false;
+//     }
+
+//     console.log(
+//       "[ondc] Signature verified"
+//     );
+
+//     return true;
+
+//   } catch (err) {
+
+//     console.error(
+//       "[ondc] Verification error",
+//       err
+//     );
+
+//     return false;
+//   }
+// }
+
 export async function verifyAuthorizationHeader(
   authHeader: string | undefined,
-  payload: unknown
+  rawBody: string
 ): Promise<boolean> {
-
   try {
-
     await sodium.ready;
 
     if (!authHeader) {
-
-      console.error(
-        "[ondc] Missing auth header"
-      );
-
-      return false;
-    }
-
-    const keyIdMatch =
-      authHeader.match(/keyId="([^"]+)"/);
-
-    const createdMatch =
-      authHeader.match(/created="([^"]+)"/);
-
-    const expiresMatch =
-      authHeader.match(/expires="([^"]+)"/);
-
-    const signatureMatch =
-      authHeader.match(/signature="([^"]+)"/);
-
-    if (
-      !keyIdMatch ||
-      !createdMatch ||
-      !expiresMatch ||
-      !signatureMatch
-    ) {
-
-      console.error(
-        "[ondc] Invalid auth header"
-      );
-
+      console.error("[ondc] Missing auth header");
       return false;
     }
 
     const keyId =
-      keyIdMatch[1];
+      authHeader.match(/keyId="([^"]+)"/)?.[1];
 
     const created =
-      createdMatch[1];
+      authHeader.match(/created="([^"]+)"/)?.[1];
 
     const expires =
-      expiresMatch[1];
+      authHeader.match(/expires="([^"]+)"/)?.[1];
 
-    const signatureBase64 =
-      signatureMatch[1];
+    const signature =
+      authHeader.match(/signature="([^"]+)"/)?.[1];
 
-    const now =
-      Math.floor(Date.now() / 1000);
-
-    if (now > Number(expires)) {
-
-      console.error(
-        "[ondc] Signature expired"
-      );
-
+    if (
+      !keyId ||
+      !created ||
+      !expires ||
+      !signature
+    ) {
+      console.error("[ondc] Invalid auth header");
       return false;
     }
 
-    const { digest } =
-      createDigest(payload);
+    const digest =
+      createDigest(rawBody).digest;
 
     const signingString =
       `(created): ${created}\n` +
@@ -404,51 +507,29 @@ export async function verifyAuthorizationHeader(
       await fetchPublicKey(subscriberId);
 
     if (!publicKey) {
-      console.error(`[ondc] Public key not found for subscriber: ${subscriberId}`);
+      console.error("[ondc] Public key missing");
       return false;
     }
-
-    const publicKeyBytes =
-      sodium.from_base64(
-        publicKey,
-        sodium.base64_variants.ORIGINAL
-      );
-
-    const signatureBytes =
-      sodium.from_base64(
-        signatureBase64,
-        sodium.base64_variants.ORIGINAL
-      );
 
     const verified =
       sodium.crypto_sign_verify_detached(
-        signatureBytes,
+        sodium.from_base64(
+          signature,
+          sodium.base64_variants.ORIGINAL
+        ),
         signingString,
-        publicKeyBytes
+        sodium.from_base64(
+          publicKey,
+          sodium.base64_variants.ORIGINAL
+        )
       );
 
-    if (!verified) {
+    console.log("VERIFIED:", verified);
 
-      console.error(
-        "[ondc] Signature verification failed"
-      );
-
-      return false;
-    }
-
-    console.log(
-      "[ondc] Signature verified"
-    );
-
-    return true;
+    return verified;
 
   } catch (err) {
-
-    console.error(
-      "[ondc] Verification error",
-      err
-    );
-
+    console.error(err);
     return false;
   }
 }
