@@ -24,8 +24,8 @@ export async function postToBap(
       payload,
     }).catch(() => undefined);
 
-    const authHeader =
-      await createAuthorizationHeader(payload);
+    // const authHeader =
+    //   await createAuthorizationHeader(payload);
       
     console.log(`[ONDC] Sending ${action} → ${url}`);
 
