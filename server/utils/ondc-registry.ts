@@ -1,125 +1,217 @@
-// // import axios from "axios";
-// // import https from "https";
+// // // // import axios from "axios";
+// // // // import https from "https";
 
-// // const httpsAgent = new https.Agent({
-// //   rejectUnauthorized: false,
-// // });
+// // // // const httpsAgent = new https.Agent({
+// // // //   rejectUnauthorized: false,
+// // // // });
+
+// // // // export async function fetchPublicKey(
+// // // //   subscriberId: string
+// // // // ): Promise<string | null> {
+
+// // // //   try {
+
+// // // //     const response = await axios.post(
+// // // //       "https://registry.ondc.org/v2.0/lookup",
+// // // //       {
+// // // //         subscriber_id: subscriberId,
+// // // //       },
+// // // //       {
+// // // //         httpsAgent,
+// // // //       }
+// // // //     );
+
+// // // //     const subscriber =
+// // // //       response.data?.[0];
+
+// // // //     if (!subscriber) {
+
+// // // //       console.error(
+// // // //         "[ondc-registry] Subscriber not found"
+// // // //       );
+
+// // // //       return null;
+// // // //     }
+
+// // // //     console.log(
+// // // //       "[ondc-registry] Public key fetched"
+// // // //     );
+
+// // // //     return subscriber.signing_public_key;
+
+// // // //   } catch (err) {
+
+// // // //     console.error(
+// // // //       "[ondc-registry] Failed lookup",
+// // // //       err
+// // // //     );
+
+// // // //     return null;
+// // // //   }
+// // // // }
+
+// // // import { ONDC_PUBLIC_KEYS }
+// // //     from "./ondc-public-keys";
+
+// // // export async function fetchPublicKey(
+// // //     subscriberId: string
+// // // ): Promise<string | null> {
+
+// // //     const key =
+// // //         ONDC_PUBLIC_KEYS[subscriberId];
+
+// // //     if (!key) {
+
+// // //         console.error(
+// // //             "[ondc] Public key not found:",
+// // //             subscriberId
+// // //         );
+
+// // //         return null;
+// // //     }
+
+// // //     return key;
+// // // }
+
+
+// // import axios from "axios";
 
 // // export async function fetchPublicKey(
-// //   subscriberId: string
+// //     subscriberId: string
 // // ): Promise<string | null> {
 
-// //   try {
+// //     try {
 
-// //     const response = await axios.post(
-// //       "https://registry.ondc.org/v2.0/lookup",
-// //       {
-// //         subscriber_id: subscriberId,
-// //       },
-// //       {
-// //         httpsAgent,
-// //       }
-// //     );
+// //         const response = await axios.post(
+// //             "https://registry.ondc.org/lookup",
+// //             {
+// //                 subscriber_id: subscriberId,
+// //             },
+// //             {
+// //                 timeout: 10000,
+// //                 headers: {
+// //                     "Content-Type": "application/json",
+// //                 },
+// //             }
+// //         );
 
-// //     const subscriber =
-// //       response.data?.[0];
+// //         const data =
+// //             response.data;
 
-// //     if (!subscriber) {
+// //         if (
+// //             !Array.isArray(data) ||
+// //             !data.length
+// //         ) {
 
-// //       console.error(
-// //         "[ondc-registry] Subscriber not found"
-// //       );
+// //             console.error(
+// //                 "[ondc-registry] Subscriber not found"
+// //             );
 
-// //       return null;
+// //             return null;
+// //         }
+
+// //         return data[0]
+// //             ?.signing_public_key || null;
+
+// //     } catch (err) {
+
+// //         console.error(
+// //             "[ondc-registry] Lookup failed",
+// //             err
+// //         );
+
+// //         return null;
 // //     }
-
-// //     console.log(
-// //       "[ondc-registry] Public key fetched"
-// //     );
-
-// //     return subscriber.signing_public_key;
-
-// //   } catch (err) {
-
-// //     console.error(
-// //       "[ondc-registry] Failed lookup",
-// //       err
-// //     );
-
-// //     return null;
-// //   }
 // // }
 
-// import { ONDC_PUBLIC_KEYS }
-//     from "./ondc-public-keys";
+
+// import axios from "axios";
+// import https from "https";
 
 // export async function fetchPublicKey(
 //     subscriberId: string
 // ): Promise<string | null> {
 
-//     const key =
-//         ONDC_PUBLIC_KEYS[subscriberId];
+//     const httpsAgent = new https.Agent({
+//         rejectUnauthorized: false,   // Only for ONDC registry
+//     });
 
-//     if (!key) {
-
-//         console.error(
-//             "[ondc] Public key not found:",
-//             subscriberId
+//     try {
+//         const response = await axios.post(
+//             "https://registry.ondc.org/lookup",   // or try /v2.0/lookup
+//             {
+//                 subscriber_id: subscriberId,
+//             },
+//             {
+//                 httpsAgent,
+//                 timeout: 10000,
+//                 headers: {
+//                     "Content-Type": "application/json",
+//                 },
+//             }
 //         );
 
+//         const data = response.data;
+
+//         if (!Array.isArray(data) || !data.length) {
+//             console.error("[ondc-registry] Subscriber not found");
+//             return null;
+//         }
+
+//         return data[0]?.signing_public_key || null;
+
+//     } catch (err: any) {
+//         console.error("[ondc-registry] Lookup failed", err?.message || err);
 //         return null;
 //     }
-
-//     return key;
 // }
 
 
 import axios from "axios";
+import https from "https";
+
+const REGISTRY_URL = "https://preprod.registry.ondc.org/v2.0/lookup";
 
 export async function fetchPublicKey(
-    subscriberId: string
+  subscriberId: string
 ): Promise<string | null> {
 
-    try {
+  const httpsAgent = new https.Agent({
+    rejectUnauthorized: false
+  });
 
-        const response = await axios.post(
-            "https://registry.ondc.org/lookup",
-            {
-                subscriber_id: subscriberId,
-            },
-            {
-                timeout: 10000,
-                headers: {
-                    "Content-Type": "application/json",
-                },
-            }
-        );
+  try {
+    console.log(`[ondc-registry] Looking up: ${subscriberId}`);
 
-        const data =
-            response.data;
+    const response = await axios.post(
+      REGISTRY_URL,
+      {
+        subscriber_id: subscriberId,
+      },
+      {
+        httpsAgent,
+        timeout: 15000,
+        headers: {
+          "Content-Type": "application/json",
+        },
+      }
+    );
 
-        if (
-            !Array.isArray(data) ||
-            !data.length
-        ) {
+    const data = response.data;
 
-            console.error(
-                "[ondc-registry] Subscriber not found"
-            );
-
-            return null;
-        }
-
-        return data[0]
-            ?.signing_public_key || null;
-
-    } catch (err) {
-
-        console.error(
-            "[ondc-registry] Lookup failed",
-            err
-        );
-
-        return null;
+    if (Array.isArray(data) && data.length > 0) {
+      const publicKey = data[0]?.signing_public_key;
+      if (publicKey) {
+        console.log(`[ondc-registry] Public key FOUND for ${subscriberId}`);
+        return publicKey;
+      }
     }
+
+    console.error("[ondc-registry] No public key returned");
+    return null;
+
+  } catch (err: any) {
+    console.error("[ondc-registry] Lookup FAILED:", err?.message || err);
+    return null;
+  }
 }

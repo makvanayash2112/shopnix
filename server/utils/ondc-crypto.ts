@@ -404,11 +404,7 @@ export async function verifyAuthorizationHeader(
       await fetchPublicKey(subscriberId);
 
     if (!publicKey) {
-
-      console.error(
-        "[ondc] Public key not found"
-      );
-
+      console.error(`[ondc] Public key not found for subscriber: ${subscriberId}`);
       return false;
     }
 
