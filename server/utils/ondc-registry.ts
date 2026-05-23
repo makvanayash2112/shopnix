@@ -234,26 +234,47 @@ export async function fetchPublicKey(
         console.log(`[ondc-registry] Looking up: ${subscriberId}`);
 
         // Create payload for registry lookup
+        // const payload = {
+        //     subscriber_id: subscriberId,
+        //     country: "IND",
+        //     // You can add "domain": "ONDC:RET10" if needed
+        // };
+
+        // // Create Authorization header using your signing key
+        // const authHeader = await createAuthorizationHeader(payload);
+
+        // if (!authHeader) {
+        //     console.error("[ondc-registry] Failed to create auth header");
+        //     return null;
+        // }
+
+        // const response = await axios.post(
+        //     REGISTRY_URL,
+        //     payload,
+        //     {
+        //         // httpsAgent,
+        //         timeout: 15000,
+        //         headers: {
+        //             "Content-Type": "application/json",
+        //             "Authorization": authHeader,
+        //         },
+        //     }
+        // );
+
         const payload = {
             subscriber_id: subscriberId,
-            country: "IND",
-            // You can add "domain": "ONDC:RET10" if needed
         };
 
-        // Create Authorization header using your signing key
-        const authHeader = await createAuthorizationHeader(payload);
+        const body =
+            JSON.stringify(payload);
 
-        if (!authHeader) {
-            console.error("[ondc-registry] Failed to create auth header");
-            return null;
-        }
+        const authHeader =
+            await createAuthorizationHeader(body);
 
         const response = await axios.post(
             REGISTRY_URL,
-            payload,
+            body,
             {
-                // httpsAgent,
-                timeout: 15000,
                 headers: {
                     "Content-Type": "application/json",
                     "Authorization": authHeader,

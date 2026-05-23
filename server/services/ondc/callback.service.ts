@@ -35,7 +35,7 @@ export async function postToBap(
       {
         headers: {
           "Content-Type": "application/json",
-          Authorization: authHeader,
+          // Authorization: authHeader,
         },
         timeout: 60000,
       }
