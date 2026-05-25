@@ -149,6 +149,23 @@ export async function createAuthorizationHeader(
       sodium.base64_variants.ORIGINAL
     );
 
+    console.log(
+    "SUBSCRIBER ID:",
+    env.ondc.subscriberId
+  );
+
+  console.log(
+    "UKID:",
+    env.ondc.uniqueKeyId
+  );
+
+  console.log(
+    "PRIVATE KEY:",
+    env.ondc.signingPrivateKey
+  );
+
+  console.log("sodium private key:", privateKey);
+
   console.log(
     "PRIVATE KEY LENGTH:",
     privateKey.length
