@@ -19,6 +19,7 @@ import {
 } from "../services/ondc/catalog.service";
 import { getPrimarySeller } from "../services/seller.service";
 import { Product, type IProduct } from "../models/Product";
+import { Seller } from "../models/Seller";
 import {
   buildOrderMessage,
   createOrderFromInit,
@@ -265,20 +266,26 @@ router.post("/select", async (req, res) => {
 
   await ackAfterWork(res, "select", async () => {
     const order = await findOrderByTransaction(body.context.transaction_id);
-    
-    // Extract provider ID from request to identify which seller
-    const providerId = (body.message?.order as { provider?: { id?: string } })?.provider?.id;
-    
+    const providerId =
+      (body.message?.order as { provider?: { id?: string } })?.provider?.id;
+
     let seller = null;
     let products: IProduct[] = [];
-    
+
     if (providerId) {
-      // Find seller by ONDC provider ID
-      seller = await (await import("../models/Seller")).Seller.findOne({
+      seller = await Seller.findOne({
         ondcProviderId: providerId,
         "ondc.isActive": { $ne: false },
       });
-      
+
+      if (!seller && providerId.toUpperCase().startsWith("SHOPNIX_")) {
+        const suffix = providerId.slice(-8);
+        seller = await Seller.findOne({
+          _id: { $regex: new RegExp(`${suffix}$`, "i") },
+          "ondc.isActive": { $ne: false },
+        });
+      }
+
       if (seller) {
         products = await Product.find({
           sellerId: seller._id,
@@ -286,17 +293,22 @@ router.post("/select", async (req, res) => {
           quantity: { $gt: 0 },
         });
       }
-    } else {
-      // Fallback to first seller (legacy behavior for single-seller setup)
-      const result = await getPublishedCatalog();
-      seller = result.seller;
-      products = result.products;
     }
-    
+
+    if (!seller) {
+      const fallback = await getPublishedCatalog();
+      seller = fallback.seller;
+      products = fallback.products;
+      logOndcBpp("select fallback seller", {
+        providerId,
+        sellerId: seller?._id,
+      });
+    }
+
     if (!seller) {
       logOndcBpp("select error: no seller found", {
         providerId,
-        transaction_id: body.context?.transaction_id,
+        transaction_id: body.context.transaction_id,
       });
       return;
     }
