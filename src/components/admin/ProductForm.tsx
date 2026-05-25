@@ -4,6 +4,7 @@ import { useState } from "react";
 import Image from "next/image";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
+import { StorageBanner } from "@/components/admin/StorageBanner";
 import { CATEGORIES } from "@/lib/categories";
 import type { Product } from "@/types";
 
@@ -54,6 +55,8 @@ export function ProductForm({
 
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
+      <StorageBanner />
+
       <div className="grid gap-4 sm:grid-cols-2">
         <Input
           label="Product name"
@@ -107,13 +110,14 @@ export function ProductForm({
           name="unit"
           defaultValue={initial?.unit ?? "unit"}
         />
-        <Input
-          label="ONDC Item ID"
-          name="ondcItemId"
-          defaultValue={initial?.ondcItemId}
-          className="sm:col-span-2"
-        />
       </div>
+
+      {initial?.ondcItemId && (
+        <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
+          ONDC item ID: <code className="font-mono">{initial.ondcItemId}</code>{" "}
+          (auto-assigned per store; same SKU can exist on another seller&apos;s store)
+        </p>
+      )}
 
       <label className="block space-y-1.5">
         <span className="text-sm font-medium text-slate-700">Description</span>
@@ -133,7 +137,21 @@ export function ProductForm({
           defaultChecked={initial?.isPublished !== false}
           className="rounded border-slate-300 text-emerald-600"
         />
-        Publish on buyer shop & ONDC catalog
+        Publish on ONDC catalog (requires image + stock &gt; 0)
+      </label>
+
+      <label className="block space-y-1.5">
+        <span className="text-sm font-medium text-slate-700">
+          Image URLs (HTTPS, one per line — works on Vercel without Blob)
+        </span>
+        <textarea
+          name="imageUrls"
+          rows={3}
+          placeholder={
+            "https://shopnix-nine.vercel.app/uploads/products/example.jpg\nhttps://your-cdn.com/photo.png"
+          }
+          className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs"
+        />
       </label>
 
       {existingImages.length > 0 && (
@@ -162,7 +180,7 @@ export function ProductForm({
 
       <label className="block space-y-1.5">
         <span className="text-sm font-medium text-slate-700">
-          Add images (up to 8 total, stored locally)
+          Upload image files (optional if URLs added above)
         </span>
         <input
           type="file"
@@ -173,7 +191,9 @@ export function ProductForm({
         />
       </label>
 
-      {error && <p className="text-sm text-red-600">{error}</p>}
+      {error && (
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      )}
 
       <Button type="submit" disabled={loading}>
         {loading ? "Saving…" : submitLabel}

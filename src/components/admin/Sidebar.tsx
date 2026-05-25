@@ -9,7 +9,7 @@ const links = [
   { href: "/shop", label: "View buyer shop", icon: "🛍" },
   { href: "/admin/products", label: "Products", icon: "▣" },
   { href: "/admin/orders", label: "Orders", icon: "◎" },
-  { href: "/admin/settings", label: "Store Settings", icon: "⚙" },
+  { href: "/admin/settings", label: "Store profile", icon: "👤" },
   { href: "/admin/ondc", label: "ONDC", icon: "⇄" },
 ];
 

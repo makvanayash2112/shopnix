@@ -34,10 +34,21 @@ export function buildNackResponse(error?: { type?: string; code?: string; messag
   };
 }
 
+export type ReplyContextOptions = {
+  /** Pramaan / ONDC v1.2.0: on_search must reuse search message_id */
+  preserveMessageId?: boolean;
+};
+
 export function replyContext(
   incoming: BecknContext,
-  action: string
+  action: string,
+  options?: ReplyContextOptions
 ): BecknContext {
+  const pairedAction = action.startsWith("on_") ? action.slice(3) : null;
+  const preserveMessageId =
+    options?.preserveMessageId ??
+    (pairedAction !== null && incoming.action === pairedAction);
+
   return {
     domain: incoming.domain || env.ondc.domain,
     country: incoming.country || env.ondc.country,
@@ -49,10 +60,9 @@ export function replyContext(
     bpp_id: incoming.bpp_id || env.ondc.bppId,
     bpp_uri: incoming.bpp_uri || env.ondc.bppUri,
     transaction_id: incoming.transaction_id,
-    message_id: uuidv4(),
+    message_id: preserveMessageId ? incoming.message_id : uuidv4(),
     timestamp: new Date().toISOString(),
-    // ttl: incoming.ttl || "PT30S",
-    ttl: "PT30S",
+    ttl: incoming.ttl || "PT30S",
   };
 }
 

@@ -56,6 +56,20 @@ Check readiness: **GET `/api/seller/ondc-readiness`** (shown on Settings page).
 
 ---
 
+## Prepare live DB (Vercel + Pramaan)
+
+Product images under `/uploads/` **do not exist on Vercel** unless you commit files or use Blob. Run once against your Atlas DB:
+
+```bash
+MONGODB_URI="your-atlas-uri" npm run prepare:live-ondc
+```
+
+This sets **HTTPS picsum** images, publishes **grocery-only** products, and completes the admin seller profile.
+
+Preview Pramaan catalog: `GET /ondc/test-catalog?mode=pramaan`
+
+---
+
 ## Pramaan: “Waiting for on_search” (logs show ACK)
 
 HTTP **200 + ACK** from Pramaan only means the callback was received. The portal step completes when the **catalog passes schema checks**.
@@ -68,8 +82,10 @@ Common fixes (built into Shopnix search catalog):
 | Seller NP test with 2 providers + `MSN` | Default is **SNP** + **one** primary seller; set `ONDC_MSN_CATALOG=true` only for true marketplace |
 | `quantity.available.count` not `99` | ONDC v1.2.0 uses `99` when in stock |
 | Mixed categories on RET10 grocery | Pramaan search sends **grocery** items when available |
+| **Wrong `message_id` on on_search** | Must match search `message_id` (fixed in `replyContext`) |
+| Images 404 on Vercel | Use `npm run prepare:live-ondc` or Blob / HTTPS URLs |
 
-After deploy, open `GET /ondc/test-catalog` and confirm image URLs are `https://shopnix-nine.vercel.app/...`, `np_type` is `SNP`, and one provider.
+After deploy, open `GET /ondc/test-catalog?mode=pramaan` and confirm image URLs are `https://picsum.photos/...`, `np_type` is `SNP`, one provider, and `message_id` note in JSON.
 
 ---
 

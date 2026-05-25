@@ -76,9 +76,20 @@ router.get("/debug-env", async (_req, res) => {
   });
 });
 
-/** Full ONDC network catalog (all active sellers) */
-router.get("/test-catalog", async (_req, res) => {
+/** Pramaan health: GET /ondc/search is not Beckn — use POST */
+router.get("/search", (_req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "ONDC search is POST only. Pramaan sends POST /ondc/search with Beckn JSON body.",
+    bpp_uri: env.ondc.bppUri,
+    method: "POST",
+  });
+});
+
+/** Preview catalog (add ?mode=pramaan for grocery-only like live search) */
+router.get("/test-catalog", async (req, res) => {
   try {
+    const pramaanMode = req.query.mode === "pramaan";
     const msn = useMsnCatalog();
     let resolved: Awaited<ReturnType<typeof getNetworkCatalogEntries>> = [];
     if (msn) {
@@ -86,9 +97,28 @@ router.get("/test-catalog", async (_req, res) => {
     } else {
       const seller = await getPrimarySeller();
       if (seller) {
-        const { products } = await getPublishedCatalog(seller._id.toString());
+        let { products } = await getPublishedCatalog(seller._id.toString());
+        if (pramaanMode) {
+          products = filterProductsForOndcSearch(
+            products,
+            "pramaan.ondc.org/beta/preprod/mock/buyer",
+            "ONDC:RET10"
+          );
+        }
         resolved = [{ seller, products }];
       }
+    }
+    if (pramaanMode && msn) {
+      resolved = resolved
+        .map((e) => ({
+          seller: e.seller,
+          products: filterProductsForOndcSearch(
+            e.products,
+            "pramaan.ondc.org/beta/preprod/mock/buyer",
+            "ONDC:RET10"
+          ),
+        }))
+        .filter((e) => e.products.length > 0);
     }
     const message = msn
       ? buildMultiSellerCatalogMessage(resolved, env.apiBaseUrl, undefined, "MSN")
@@ -104,8 +134,10 @@ router.get("/test-catalog", async (_req, res) => {
     res.json({
       success: true,
       catalogMode: msn ? "MSN" : "SNP",
+      pramaanMode,
       sellerCount: resolved.length,
       productCount: totalProducts,
+      note: "Pramaan on_search uses same message_id as search — fixed in replyContext",
       catalog: message,
     });
   } catch (err: unknown) {
@@ -197,6 +229,12 @@ router.post("/search", async (req, res) => {
     }
 
     const context = replyContext(body.context, "on_search");
+    logOndcBpp("on_search context ids", {
+      transaction_id: context.transaction_id,
+      message_id: context.message_id,
+      search_message_id: body.context?.message_id,
+      ids_match: context.message_id === body.context?.message_id,
+    });
     const message = msn
       ? buildMultiSellerCatalogMessage(entries, env.apiBaseUrl, undefined, "MSN")
       : buildCatalogMessage(

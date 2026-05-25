@@ -6,6 +6,7 @@ import {
   getSellerOndcReadiness,
   assignOndcProviderId,
 } from "../services/ondc/seller-readiness.service";
+import { getImageStorageStatus } from "../lib/image-storage";
 
 const router = Router();
 
@@ -19,6 +20,10 @@ router.get("/profile", async (req: AuthRequest, res) => {
     await seller.save();
   }
   return sendSuccess(res, seller);
+});
+
+router.get("/storage-status", (_req, res) => {
+  return sendSuccess(res, getImageStorageStatus());
 });
 
 router.get("/ondc-readiness", async (req: AuthRequest, res) => {

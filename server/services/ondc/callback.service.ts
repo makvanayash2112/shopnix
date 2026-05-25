@@ -28,6 +28,7 @@ export async function postToBap(
       bap_id: context.bap_id,
       bap_uri: context.bap_uri,
       transaction_id: context.transaction_id,
+      message_id: context.message_id,
       bodyLength: body.length,
     });
 

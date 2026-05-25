@@ -1,29 +1,27 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
 import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
-import type { Seller } from "@/types";
-
-type Readiness = {
-  ready: boolean;
-  providerId?: string;
-  publishedCount?: number;
-  checks?: { id: string; label: string; ok: boolean; hint?: string }[];
-  networkNote?: string;
-};
+import { StorageBanner } from "@/components/admin/StorageBanner";
+import type { OndcReadiness, Seller } from "@/types";
 
 export default function SettingsPage() {
   const [seller, setSeller] = useState<Seller | null>(null);
-  const [readiness, setReadiness] = useState<Readiness | null>(null);
+  const [readiness, setReadiness] = useState<OndcReadiness | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
+  function refresh() {
     apiFetch<Seller>("/seller/profile").then(setSeller).catch(console.error);
-    apiFetch<Readiness>("/seller/ondc-readiness").then(setReadiness).catch(console.error);
+    apiFetch<OndcReadiness>("/seller/ondc-readiness").then(setReadiness).catch(console.error);
+  }
+
+  useEffect(() => {
+    refresh();
   }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -51,10 +49,14 @@ export default function SettingsPage() {
             type: fd.get("fulfillmentType"),
             radiusKm: Number(fd.get("radiusKm")),
           },
+          ondc: {
+            isActive: fd.get("ondcActive") === "on",
+          },
         }),
       });
       setSeller(updated);
-      setMessage("Settings saved.");
+      setMessage("Profile saved.");
+      refresh();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -62,17 +64,63 @@ export default function SettingsPage() {
     }
   }
 
-  if (!seller) return <p className="text-slate-500">Loading…</p>;
+  if (!seller) return <p className="text-slate-500">Loading profile…</p>;
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
-      <h1 className="text-2xl font-bold">Store settings</h1>
+    <div className="mx-auto max-w-3xl space-y-6">
+      <div>
+        <h1 className="text-2xl font-bold">Store profile</h1>
+        <p className="text-slate-500">
+          Details used for ONDC provider location and fulfillment
+        </p>
+      </div>
+
+      <Card className="bg-slate-50">
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <h2 className="text-lg font-semibold">{seller.storeName}</h2>
+            <p className="text-sm text-slate-600">{seller.email}</p>
+            {seller.phone && (
+              <p className="text-sm text-slate-600">{seller.phone}</p>
+            )}
+            <p className="mt-2 font-mono text-xs text-slate-500">
+              ONDC provider: {seller.ondcProviderId || readiness?.providerId}
+            </p>
+          </div>
+          <div className="text-right text-sm">
+            <p className="font-medium text-slate-700">ONDC network</p>
+            <p className="text-emerald-700">
+              {seller.ondc?.isActive !== false ? "Listed" : "Paused"}
+            </p>
+            <Link
+              href="/admin/ondc"
+              className="mt-2 inline-block text-emerald-600 hover:underline"
+            >
+              ONDC console →
+            </Link>
+          </div>
+        </div>
+      </Card>
+
+      <StorageBanner />
 
       {readiness && (
         <Card className="border-emerald-200 bg-emerald-50/50">
-          <h2 className="mb-2 font-semibold text-slate-900">ONDC seller readiness</h2>
-          <p className="mb-3 text-sm text-slate-600">
-            Provider ID: <code className="text-xs">{readiness.providerId}</code>
+          <div className="flex items-center justify-between gap-2">
+            <h2 className="font-semibold text-slate-900">ONDC readiness</h2>
+            <span
+              className={`rounded-full px-2.5 py-0.5 text-xs font-medium ${
+                readiness.ready
+                  ? "bg-emerald-600 text-white"
+                  : "bg-amber-100 text-amber-900"
+              }`}
+            >
+              {readiness.ready ? "Ready" : "Incomplete"}
+            </span>
+          </div>
+          <p className="mb-3 mt-2 text-sm text-slate-600">
+            Provider ID:{" "}
+            <code className="text-xs">{readiness.providerId}</code>
             {readiness.publishedCount != null && (
               <> · Published products: {readiness.publishedCount}</>
             )}
@@ -90,10 +138,16 @@ export default function SettingsPage() {
           {readiness.networkNote && (
             <p className="mt-3 text-xs text-slate-500">{readiness.networkNote}</p>
           )}
+          <Link
+            href="/admin/products"
+            className="mt-4 inline-block text-sm font-medium text-emerald-700 hover:underline"
+          >
+            Manage products →
+          </Link>
         </Card>
       )}
 
-      <Card>
+      <Card title="Edit profile">
         <form onSubmit={onSubmit} className="space-y-4">
           <Input
             label="Store name"
@@ -113,13 +167,15 @@ export default function SettingsPage() {
             />
           </label>
           <Input label="GSTIN" name="gstin" defaultValue={seller.gstin} />
-          <Input label="Phone" name="phone" defaultValue={seller.phone} />
-          <Input
-            label="Email"
-            name="email"
-            type="email"
-            defaultValue={seller.email}
-          />
+          <div className="grid gap-4 sm:grid-cols-2">
+            <Input label="Phone" name="phone" defaultValue={seller.phone} required />
+            <Input
+              label="Email"
+              name="email"
+              type="email"
+              defaultValue={seller.email}
+            />
+          </div>
           <Input
             label="Street"
             name="street"
@@ -158,6 +214,15 @@ export default function SettingsPage() {
               defaultValue={seller.fulfillment?.radiusKm ?? 5}
             />
           </div>
+          <label className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              name="ondcActive"
+              defaultChecked={seller.ondc?.isActive !== false}
+              className="rounded border-slate-300 text-emerald-600"
+            />
+            List my store on ONDC network catalog
+          </label>
           {message && (
             <p
               className={`text-sm ${message.includes("saved") ? "text-emerald-600" : "text-red-600"}`}
@@ -166,7 +231,7 @@ export default function SettingsPage() {
             </p>
           )}
           <Button type="submit" disabled={loading}>
-            {loading ? "Saving…" : "Save settings"}
+            {loading ? "Saving…" : "Save profile"}
           </Button>
         </form>
       </Card>

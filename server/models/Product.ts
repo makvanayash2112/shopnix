@@ -35,13 +35,14 @@ const productSchema = new Schema<IProduct>(
     unit: { type: String, default: "unit" },
     images: [{ type: String }],
     isPublished: { type: Boolean, default: true },
-    ondcItemId: { type: String, required: true, unique: true },
+    ondcItemId: { type: String, required: true },
     tags: [String],
   },
   { timestamps: true }
 );
 
 productSchema.index({ sellerId: 1, sku: 1 }, { unique: true });
+productSchema.index({ sellerId: 1, ondcItemId: 1 }, { unique: true });
 
 export const Product: Model<IProduct> =
   mongoose.models.Product ||

@@ -21,12 +21,20 @@ export async function getSellerOndcReadiness(sellerId: string) {
     quantity: { $gt: 0 },
   });
 
-  const withImages = await Product.countDocuments({
+  const publishedProducts = await Product.find({
     sellerId,
     isPublished: true,
     quantity: { $gt: 0 },
-    images: { $exists: true, $not: { $size: 0 } },
-  });
+  }).select("images");
+
+  const withRealImages = publishedProducts.filter((p) =>
+    (p.images ?? []).some(
+      (url) =>
+        url.startsWith("https://") &&
+        !url.includes("placehold.co") &&
+        !url.includes("localhost")
+    )
+  ).length;
 
   const checks: OndcReadinessCheck[] = [
     {
@@ -70,9 +78,10 @@ export async function getSellerOndcReadiness(sellerId: string) {
     },
     {
       id: "product_images",
-      label: "Published products have images",
-      ok: publishedCount === 0 || withImages > 0,
-      hint: "Add at least one image per product",
+      label: "Published products have public HTTPS images",
+      ok: publishedCount === 0 || withRealImages > 0,
+      hint:
+        "Upload via Vercel Blob (BLOB_READ_WRITE_TOKEN) or paste HTTPS image URLs — not localhost or placeholders",
     },
     {
       id: "provider_id",

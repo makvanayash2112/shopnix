@@ -3,7 +3,9 @@ import { Seller } from "../../models/Seller";
 import { env } from "../../config/env";
 import {
   mapOndcCategory,
+  normalizeOndcUnit,
   ondcAvailableCount,
+  ondcFallbackImageUrl,
   resolvePublicImageUrl,
 } from "../../constants/ondc-catalog";
 import type { IProduct } from "../../models/Product";
@@ -55,26 +57,23 @@ function itemDescriptor(
   const { categoryId } = mapOndcCategory(product.categorySlug);
   const imageUrls = (product.images.length
     ? product.images
-    : ["/uploads/products/placeholder.png"]
-  ).map((url) => resolvePublicImageUrl(url, baseUrl));
+    : [ondcFallbackImageUrl(product.ondcItemId)]
+  ).map((url) => resolvePublicImageUrl(url, baseUrl, product.ondcItemId));
   const images = imageUrls.map((url) => ({ url }));
-
-  const unit =
-    product.unit === "kilogram" ||
-    product.unit === "gram" ||
-    product.unit === "litre" ||
-    product.unit === "millilitre" ||
-    product.unit === "dozen" ||
-    product.unit === "tonne"
-      ? product.unit
-      : "unit";
+  const unit = normalizeOndcUnit(product.unit);
+  const shortDesc =
+    product.description?.slice(0, 120) || product.name;
+  const longDesc =
+    product.description && product.description.length > shortDesc.length
+      ? product.description
+      : `${product.name}. ${product.brand ? `Brand: ${product.brand}.` : ""} Available on Shopnix ONDC.`;
 
   return {
     id: product.ondcItemId,
     descriptor: {
       name: product.name,
-      short_desc: product.description?.slice(0, 120) || product.name,
-      long_desc: product.description || product.name,
+      short_desc: shortDesc,
+      long_desc: longDesc,
       code: defaultItemCode(product),
       images,
       symbol: images[0]?.url,
@@ -96,8 +95,23 @@ function itemDescriptor(
     },
     "@ondc/org/cancellable": true,
     "@ondc/org/returnable": true,
+    "@ondc/org/return_window": "P7D",
     "@ondc/org/available_on_cod": true,
     "@ondc/org/time_to_ship": "PT24H",
+    tags: [
+      {
+        code: "origin",
+        list: [{ code: "country", value: "IND" }],
+      },
+      ...(product.brand
+        ? [
+            {
+              code: "attribute",
+              list: [{ code: "brand", value: product.brand }],
+            },
+          ]
+        : []),
+    ],
   };
 }
 
@@ -113,14 +127,21 @@ function buildProviderBlock(
     products[0]?.categorySlug || "grocery"
   );
 
+  const providerShort =
+    (seller.storeDescription || seller.storeName).slice(0, 120) || seller.storeName;
+  let providerLong =
+    seller.storeDescription?.trim() ||
+    `${seller.storeName} — retail grocery & essentials on ONDC via Shopnix.`;
+  if (providerLong === providerShort) {
+    providerLong = `${providerLong} Serving ${seller.address?.city || "Bengaluru"} and nearby areas.`;
+  }
+
   return {
     id: providerId,
     descriptor: {
       name: seller.storeName,
-      short_desc:
-        (seller.storeDescription || seller.storeName).slice(0, 120) ||
-        seller.storeName,
-      long_desc: seller.storeDescription || `${seller.storeName} on Shopnix`,
+      short_desc: providerShort,
+      long_desc: providerLong,
     },
     locations: [
       {
@@ -175,7 +196,7 @@ function bppDescriptor(
   baseUrl: string,
   npType: CatalogNpType
 ) {
-  const symbol = resolvePublicImageUrl("/uploads/products/placeholder.png", baseUrl);
+  const symbol = ondcFallbackImageUrl(name.replace(/\s+/g, "-").toLowerCase());
   return {
     name,
     short_desc: shortDesc,
@@ -235,6 +256,11 @@ export function buildMultiSellerCatalogMessage(
         npType
       ),
       "bpp/providers": providers,
+      payments: [
+        { id: "1", type: "PRE-FULFILLMENT", collected_by: "BPP" },
+        { id: "2", type: "ON-FULFILLMENT", collected_by: "BPP" },
+        { id: "3", type: "POST-FULFILLMENT", collected_by: "BPP" },
+      ],
     },
   };
 }
@@ -301,7 +327,21 @@ export async function getNetworkCatalogMessage(baseUrl: string) {
   return buildMultiSellerCatalogMessage(entries, baseUrl);
 }
 
-export async function resolveSellerFromOndcItemId(ondcItemId: string) {
+export async function resolveSellerFromOndcItemId(
+  ondcItemId: string,
+  providerId?: string
+) {
+  if (providerId) {
+    const seller = await Seller.findOne({ ondcProviderId: providerId });
+    if (seller) {
+      const product = await Product.findOne({
+        sellerId: seller._id,
+        ondcItemId,
+      });
+      if (product) return { seller, product };
+    }
+  }
+
   const product = await Product.findOne({ ondcItemId });
   if (!product) return { seller: null, product: null };
   const seller = await Seller.findById(product.sellerId);

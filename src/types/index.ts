@@ -52,6 +52,23 @@ export interface Seller {
     type: string;
     radiusKm?: number;
   };
+  ondcProviderId?: string;
+}
+
+export interface ImageStorageStatus {
+  mode: "vercel-blob" | "urls-only" | "local-disk";
+  blobConfigured: boolean;
+  onVercel: boolean;
+  publicBaseUrl: string;
+  hint: string;
+}
+
+export interface OndcReadiness {
+  ready: boolean;
+  providerId?: string;
+  publishedCount?: number;
+  checks?: { id: string; label: string; ok: boolean; hint?: string }[];
+  networkNote?: string;
 }
 
 export interface Product {
