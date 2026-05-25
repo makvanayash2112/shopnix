@@ -3,6 +3,7 @@ import { OndcLog } from "../models/OndcLog";
 import { buildNackResponse } from "../utils/beckn";
 import { verifyAuthorizationHeader } from "../utils/ondc-crypto";
 import { logOndcEnvConfig, logOndcBpp } from "../utils/ondc-debug";
+import { isPreprodTrustedSearch } from "../utils/ondc-preprod-trust";
 
 let envBootLogged = false;
 
@@ -63,6 +64,16 @@ export async function logOndcBppIncoming(
       return res
         .status(401)
         .json(buildNackResponse({ message: "Authorization header missing" }));
+    }
+
+    if (isPreprodTrustedSearch(req)) {
+      OndcLog.create({
+        action: body.context.action,
+        transactionId: body.context.transaction_id,
+        direction: "incoming",
+        payload: body,
+      }).catch((err) => logOndcBpp("OndcLog save failed", err));
+      return next();
     }
 
     const rawBody =

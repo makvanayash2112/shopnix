@@ -7,6 +7,7 @@ import {
 import { logOndcBppIncoming } from "../middleware/ondc-bpp";
 import { postToBap } from "../services/ondc/callback.service";
 import { logOndcBpp, deriveSigningPublicKey } from "../utils/ondc-debug";
+import { isPreprodTrustSearchEnabled } from "../utils/ondc-preprod-trust";
 import {
   buildCatalogMessage,
   getPublishedCatalog,
@@ -63,6 +64,7 @@ router.get("/debug-env", async (_req, res) => {
     env_public_key: process.env.ONDC_SIGNING_PUBLIC_KEY || null,
     portal_expected_public: "VeKKg8tUxcZ00SB1tvkwYDrZ2VnQ0rQ4c/KyzyBVMMY=",
     keys_match_portal: derived === "VeKKg8tUxcZ00SB1tvkwYDrZ2VnQ0rQ4c/KyzyBVMMY=",
+    preprod_trust_search: isPreprodTrustSearchEnabled(),
     domain: env.ondc.domain,
     city: env.ondc.city,
     country: env.ondc.country,
