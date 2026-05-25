@@ -322,6 +322,11 @@ export async function verifyAuthorizationHeader(
         uniqueKeyId
       );
 
+      console.log(
+        "FETCHED PUBLIC KEY:",
+        publicKey
+      );
+
     if (!publicKey) {
 
       console.error(
