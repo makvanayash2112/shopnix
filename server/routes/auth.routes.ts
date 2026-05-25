@@ -5,6 +5,7 @@ import { env } from "../config/env";
 import { User } from "../models/User";
 import { Seller } from "../models/Seller";
 import { sendError, sendSuccess } from "../utils/response";
+import { assignOndcProviderId } from "../services/ondc/seller-readiness.service";
 import { requireAuth, type AuthRequest } from "../middleware/auth";
 
 const router = Router();
@@ -36,8 +37,11 @@ router.post("/register", async (req, res) => {
         domain: env.ondc.domain,
         city: env.ondc.city,
         isActive: true,
+        subscriberId: env.ondc.subscriberId || env.ondc.bppId,
       },
     });
+    seller.ondcProviderId = assignOndcProviderId(seller);
+    await seller.save();
 
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({

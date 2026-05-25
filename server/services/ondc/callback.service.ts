@@ -42,7 +42,12 @@ export async function postToBap(
       transformRequest: [(data) => data],
     });
 
-    logOndcBpp(`${action} success`, { status: response.status });
+    const ackStatus = (response.data as { message?: { ack?: { status?: string } } })
+      ?.message?.ack?.status;
+    logOndcBpp(`${action} success`, {
+      status: response.status,
+      ack: ackStatus,
+    });
     return response.data;
   } catch (err: unknown) {
     const ax = err as {
@@ -55,5 +60,6 @@ export async function postToBap(
       data: ax.response?.data,
       message: ax.message,
     });
+    return null;
   }
 }

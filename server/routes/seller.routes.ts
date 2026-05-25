@@ -2,6 +2,10 @@ import { Router } from "express";
 import { Seller } from "../models/Seller";
 import { requireAuth, type AuthRequest } from "../middleware/auth";
 import { sendError, sendSuccess } from "../utils/response";
+import {
+  getSellerOndcReadiness,
+  assignOndcProviderId,
+} from "../services/ondc/seller-readiness.service";
 
 const router = Router();
 
@@ -10,7 +14,18 @@ router.use(requireAuth);
 router.get("/profile", async (req: AuthRequest, res) => {
   const seller = await Seller.findById(req.user!.sellerId);
   if (!seller) return sendError(res, "Seller profile not found", 404);
+  if (!seller.ondcProviderId) {
+    seller.ondcProviderId = assignOndcProviderId(seller);
+    await seller.save();
+  }
   return sendSuccess(res, seller);
+});
+
+router.get("/ondc-readiness", async (req: AuthRequest, res) => {
+  const sellerId = req.user!.sellerId?.toString();
+  if (!sellerId) return sendError(res, "Seller profile not linked", 400);
+  const readiness = await getSellerOndcReadiness(sellerId);
+  return sendSuccess(res, readiness);
 });
 
 router.put("/profile", async (req: AuthRequest, res) => {
@@ -34,6 +49,7 @@ router.put("/profile", async (req: AuthRequest, res) => {
       isActive: boolean;
       subscriberId: string;
     }>;
+    ondcProviderId: string;
   }>;
 
   if (body.storeName) seller.storeName = body.storeName;
@@ -55,6 +71,12 @@ router.put("/profile", async (req: AuthRequest, res) => {
   }
   if (body.ondc) {
     seller.ondc = { ...seller.ondc, ...body.ondc };
+  }
+  if (body.ondcProviderId) {
+    seller.ondcProviderId = body.ondcProviderId;
+  }
+  if (!seller.ondcProviderId) {
+    seller.ondcProviderId = assignOndcProviderId(seller);
   }
 
   await seller.save();

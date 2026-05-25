@@ -8,8 +8,11 @@ import { logOndcBppIncoming } from "../middleware/ondc-bpp";
 import { postToBap } from "../services/ondc/callback.service";
 import { logOndcBpp, deriveSigningPublicKey } from "../utils/ondc-debug";
 import { isPreprodTrustSearchEnabled } from "../utils/ondc-preprod-trust";
+import { ackAfterWork } from "../utils/ondc-async";
 import {
   buildCatalogMessage,
+  getNetworkCatalogEntries,
+  buildMultiSellerCatalogMessage,
   getPublishedCatalog,
 } from "../services/ondc/catalog.service";
 import { getPrimarySeller } from "../services/seller.service";
@@ -71,17 +74,25 @@ router.get("/debug-env", async (_req, res) => {
   });
 });
 
-/** Test endpoint to view your catalog exactly as ONDC sees it */
-router.get("/test-catalog", async (req, res) => {
+/** Full ONDC network catalog (all active sellers) */
+router.get("/test-catalog", async (_req, res) => {
   try {
-    const { seller, products } = await getPublishedCatalog();
-    if (!seller) {
-      return res.json({ error: "No seller found in the database!" });
-    }
-    const message = buildCatalogMessage(seller, products, env.apiBaseUrl);
-    res.json({ success: true, productCount: products.length, catalog: message });
-  } catch (err: any) {
-    res.status(500).json({ error: err.message });
+    const entries = await getNetworkCatalogEntries();
+    const message = buildMultiSellerCatalogMessage(
+      entries,
+      env.apiBaseUrl
+    );
+    const totalProducts = entries.reduce((n, e) => n + e.products.length, 0);
+    res.json({
+      success: true,
+      sellerCount: entries.length,
+      productCount: totalProducts,
+      catalog: message,
+    });
+  } catch (err: unknown) {
+    res.status(500).json({
+      error: err instanceof Error ? err.message : "catalog error",
+    });
   }
 });
 
@@ -108,99 +119,93 @@ router.use(logOndcBppIncoming);
 router.post("/search", async (req, res) => {
   const body = req.body as BecknBody;
 
-  ack(res);
-
-  try {
-    logOndcBpp("search ACK sent — building catalog", {
+  await ackAfterWork(res, "search", async () => {
+    logOndcBpp("search — building catalog", {
       transaction_id: body.context?.transaction_id,
       bap_id: body.context?.bap_id,
       bap_uri: body.context?.bap_uri,
     });
 
-    const { seller, products } = await getPublishedCatalog();
+    const entries = await getNetworkCatalogEntries();
+    const totalProducts = entries.reduce((n, e) => n + e.products.length, 0);
 
-    logOndcBpp("catalog source", {
-      sellerId: seller?._id?.toString(),
-      storeName: seller?.storeName,
-      productCount: products.length,
+    logOndcBpp("network catalog", {
+      sellers: entries.map((e) => ({
+        store: e.seller.storeName,
+        providerId: e.seller.ondcProviderId,
+        products: e.products.length,
+      })),
+      totalProducts,
     });
 
-    if (!seller) {
-      logOndcBpp("search abort: no seller in DB");
+    if (entries.length === 0 || totalProducts === 0) {
+      logOndcBpp(
+        "search abort: no published products — sellers must register + publish in admin"
+      );
       return;
     }
 
     const context = replyContext(body.context, "on_search");
-    const message = buildCatalogMessage(seller, products, env.apiBaseUrl);
+    const message = buildMultiSellerCatalogMessage(entries, env.apiBaseUrl);
 
-    logOndcBpp("posting on_search to buyer", {
-      bap_uri: context.bap_uri,
+    logOndcBpp("posting on_search", {
+      url: `${context.bap_uri?.replace(/\/$/, "")}/on_search`,
       bpp_id: context.bpp_id,
-      products: products.length,
+      sellers: entries.length,
+      products: totalProducts,
     });
 
-    await postToBap(context, "on_search", message);
-  } catch (err) {
-    logOndcBpp("search ERROR", err);
-  }
+    const result = await postToBap(context, "on_search", message);
+    if (!result) {
+      throw new Error("on_search POST failed — check Vercel logs for outgoing on_search FAILED");
+    }
+  });
 });
 
 router.post("/select", async (req, res) => {
-
-
   const body = req.body as BecknBody;
 
-  ack(res);
-  try {
-    console.log("SELECT REQUEST:");
-    console.log(JSON.stringify(body, null, 2));
+  await ackAfterWork(res, "select", async () => {
     const order = await findOrderByTransaction(body.context.transaction_id);
     const { seller, products } = await getPublishedCatalog();
-    if (seller) {
-      const selectItems =
-        (body.message?.order as { items?: { id: string }[] })?.items ?? [];
+    if (!seller) return;
 
-      const matched = products.filter((p) =>
-        selectItems.some((i) => i.id === p.ondcItemId)
-      );
+    const selectItems =
+      (body.message?.order as { items?: { id: string }[] })?.items ?? [];
+    const matched = products.filter((p) =>
+      selectItems.some((i) => i.id === p.ondcItemId)
+    );
+    const context = replyContext(body.context, "on_select");
+    const quoteValue = matched.reduce((s, p) => s + p.price, 0);
 
-      const context = replyContext(body.context, "on_select");
-      const quoteValue = matched.reduce((s, p) => s + p.price, 0);
-
-      await postToBap(context, "on_select", {
-        order: {
-          items: matched.map((p) => ({
-            id: p.ondcItemId,
-            fulfillment_id: "F1",
-            quantity: { count: 1 },
-          })),
-          provider: { id: seller._id.toString() },
-          // provider: {
-          //   id: seller.ondcProviderId || "SHOPNIX_PROVIDER"
-          // },
-          quote: {
-            price: { currency: "INR", value: String(quoteValue) },
-            breakup: matched.map((p) => ({
-              title: p.name,
-              price: { currency: "INR", value: String(p.price) },
-              item: { id: p.ondcItemId },
-            })),
-          },
-          ...(order ? { id: order.orderId } : {}),
+    await postToBap(context, "on_select", {
+      order: {
+        items: matched.map((p) => ({
+          id: p.ondcItemId,
+          fulfillment_id: "F1",
+          quantity: { count: 1 },
+        })),
+        provider: {
+          id: seller.ondcProviderId || `SHOPNIX_${seller._id.toString().slice(-8)}`,
         },
-      });
-    }
-  } catch (err) {
-    console.error("[select] Error:", err);
-  }
+        quote: {
+          price: { currency: "INR", value: String(quoteValue) },
+          breakup: matched.map((p) => ({
+            title: p.name,
+            price: { currency: "INR", value: String(p.price) },
+            item: { id: p.ondcItemId },
+          })),
+        },
+        ...(order ? { id: order.orderId } : {}),
+      },
+    });
+  });
 });
 
 router.post("/init", async (req, res) => {
   const body = req.body as BecknBody;
-   ack(res);
-  try {
-    console.log("INIT REQUEST:");
-    console.log(JSON.stringify(body, null, 2));
+
+  await ackAfterWork(res, "init", async () => {
     const orderMsg = body.message?.order as {
       items?: { id: string; quantity?: { count?: number } }[];
       billing?: Record<string, unknown>;
@@ -214,33 +219,27 @@ router.post("/init", async (req, res) => {
 
     const context = replyContext(body.context, "on_init");
     await postToBap(context, "on_init", buildOrderMessage(order));
-  } catch (err) {
-    console.error("[init] Error:", err);
-  }
+  });
 });
 
 router.post("/confirm", async (req, res) => {
   const body = req.body as BecknBody;
-   ack(res);
-  try {
-    console.log("CONFIRM REQUEST:");
-    console.log(JSON.stringify(body, null, 2));
-    const order = await findOrderByTransaction(body.context.transaction_id);
-    if (order) {
-      order.status = "Accepted";
-      order.fulfillment = order.fulfillment || { type: "Delivery" };
-      order.fulfillment.state = "Confirmed";
-      order.payment.status = "NOT-PAID";
-      order.payment.method = "cash";
-      order.bapOrderId = (body.message?.order as { id?: string })?.id;
-      await order.save();
 
-      const context = replyContext(body.context, "on_confirm");
-      await postToBap(context, "on_confirm", buildOrderMessage(order));
-    }
-  } catch (err) {
-    console.error("[confirm] Error:", err);
-  }
+  await ackAfterWork(res, "confirm", async () => {
+    const order = await findOrderByTransaction(body.context.transaction_id);
+    if (!order) return;
+
+    order.status = "Accepted";
+    order.fulfillment = order.fulfillment || { type: "Delivery" };
+    order.fulfillment.state = "Confirmed";
+    order.payment.status = "NOT-PAID";
+    order.payment.method = "cash";
+    order.bapOrderId = (body.message?.order as { id?: string })?.id;
+    await order.save();
+
+    const context = replyContext(body.context, "on_confirm");
+    await postToBap(context, "on_confirm", buildOrderMessage(order));
+  });
 });
 
 router.post("/status", async (req, res) => {

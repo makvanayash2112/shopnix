@@ -7,13 +7,23 @@ import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
 import type { Seller } from "@/types";
 
+type Readiness = {
+  ready: boolean;
+  providerId?: string;
+  publishedCount?: number;
+  checks?: { id: string; label: string; ok: boolean; hint?: string }[];
+  networkNote?: string;
+};
+
 export default function SettingsPage() {
   const [seller, setSeller] = useState<Seller | null>(null);
+  const [readiness, setReadiness] = useState<Readiness | null>(null);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     apiFetch<Seller>("/seller/profile").then(setSeller).catch(console.error);
+    apiFetch<Readiness>("/seller/ondc-readiness").then(setReadiness).catch(console.error);
   }, []);
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -57,6 +67,32 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl space-y-6">
       <h1 className="text-2xl font-bold">Store settings</h1>
+
+      {readiness && (
+        <Card className="border-emerald-200 bg-emerald-50/50">
+          <h2 className="mb-2 font-semibold text-slate-900">ONDC seller readiness</h2>
+          <p className="mb-3 text-sm text-slate-600">
+            Provider ID: <code className="text-xs">{readiness.providerId}</code>
+            {readiness.publishedCount != null && (
+              <> · Published products: {readiness.publishedCount}</>
+            )}
+          </p>
+          <ul className="space-y-1 text-sm">
+            {readiness.checks?.map((c) => (
+              <li key={c.id} className={c.ok ? "text-emerald-700" : "text-amber-700"}>
+                {c.ok ? "✓" : "○"} {c.label}
+                {!c.ok && c.hint && (
+                  <span className="block text-xs text-slate-500">{c.hint}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+          {readiness.networkNote && (
+            <p className="mt-3 text-xs text-slate-500">{readiness.networkNote}</p>
+          )}
+        </Card>
+      )}
+
       <Card>
         <form onSubmit={onSubmit} className="space-y-4">
           <Input

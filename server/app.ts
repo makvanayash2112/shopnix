@@ -3,6 +3,7 @@ import cors from "cors";
 import path from "path";
 import apiRoutes from "./routes";
 import ondcRoutes from "./routes/ondc.routes";
+import ondcSubscribeRoutes from "./routes/ondc-subscribe.routes";
 import ondcGuideRoutes from "./routes/ondc-guide.routes";
 import ondcBapRoutes from "./routes/ondc-bap.routes";
 import { getSiteUrl } from "./lib/site-url";
@@ -79,6 +80,7 @@ export function createApp() {
 
   /** ONDC registry paths (same domain root — required for Vercel + ONDC portal) */
   /** Seller (BPP) only — buyer BAP routes disabled unless ONDC_ENABLE_BAP=true */
+  app.use("/ondc", ondcSubscribeRoutes);
   app.use("/ondc", ondcRoutes);
   app.use("/ondc", ondcGuideRoutes);
   if (process.env.ONDC_ENABLE_BAP === "true") {

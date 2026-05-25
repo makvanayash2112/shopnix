@@ -7,6 +7,7 @@ import { connectDatabase } from "../config/database";
 import { env } from "../config/env";
 import { User } from "../models/User";
 import { Seller } from "../models/Seller";
+import { assignOndcProviderId } from "../services/ondc/seller-readiness.service";
 
 const ADMIN_EMAIL = "admin@shopnix.com";
 const ADMIN_PASSWORD = "Shopnix@Admin2026";
@@ -21,6 +22,15 @@ async function seedAdmin() {
       storeName: env.defaultStoreName,
       storeDescription: "Shopnix ONDC seller admin store",
       email: ADMIN_EMAIL,
+      phone: "9999999999",
+      gstin: "29ABCDE1234F1Z5",
+      address: {
+        street: "MG Road",
+        city: "Bengaluru",
+        state: "KA",
+        pincode: "560001",
+        country: "India",
+      },
       ondc: {
         bppId: env.ondc.bppId,
         bppUri: env.ondc.bppUri,
@@ -30,8 +40,14 @@ async function seedAdmin() {
         subscriberId: env.ondc.subscriberId,
       },
     });
-    console.log("[seed] Seller profile created");
+    seller.ondcProviderId = assignOndcProviderId(seller);
+    await seller.save();
+    console.log("[seed] Seller profile created, provider:", seller.ondcProviderId);
   } else {
+    if (!seller.ondcProviderId) {
+      seller.ondcProviderId = assignOndcProviderId(seller);
+      await seller.save();
+    }
     console.log("[seed] Seller profile already exists");
   }
 

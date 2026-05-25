@@ -1,7 +1,9 @@
 import { v4 as uuidv4 } from "uuid";
 import { Order, type IOrder, type OrderStatus } from "../../models/Order";
 import { Product } from "../../models/Product";
+import { resolveSellerFromOndcItemId } from "./catalog.service";
 import { getPrimarySeller } from "../seller.service";
+import type { ISeller } from "../../models/Seller";
 import type { BecknContext } from "../../utils/beckn";
 
 interface BecknOrderItem {
@@ -14,13 +16,15 @@ export async function createOrderFromInit(
   items: BecknOrderItem[],
   customer?: Record<string, unknown>
 ): Promise<IOrder> {
-  const seller = await getPrimarySeller();
+  let seller: ISeller | null = await getPrimarySeller();
   const orderItems = [];
 
   for (const item of items) {
-    const product = await Product.findOne({ ondcItemId: item.id });
+    const resolved = await resolveSellerFromOndcItemId(item.id);
+    const product = resolved.product;
     const qty = Number(item.quantity?.count ?? 1);
     if (product) {
+      if (resolved.seller) seller = resolved.seller;
       orderItems.push({
         productId: product._id,
         ondcItemId: product.ondcItemId,
@@ -29,6 +33,10 @@ export async function createOrderFromInit(
         price: product.price,
       });
     }
+  }
+
+  if (!seller) {
+    throw new Error("No seller found for ONDC order");
   }
 
   const amount = orderItems.reduce(
