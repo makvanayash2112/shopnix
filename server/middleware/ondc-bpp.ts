@@ -25,11 +25,14 @@ export async function logOndcBppIncoming(
     logOndcBpp(`INCOMING ${req.method} ${req.originalUrl}`);
 
     const authHeader = (req.headers.authorization ||
-      req.headers["authorization"] ||
-      req.headers["x-gateway-authorization"] ||
-      req.headers["X-Gateway-Authorization"]) as string;
+      req.headers["authorization"]) as string | undefined;
+    const gatewayAuth = (req.headers["x-gateway-authorization"] ||
+      req.headers["X-Gateway-Authorization"]) as string | undefined;
 
-    logOndcBpp("auth header present", Boolean(authHeader));
+    logOndcBpp("auth headers", {
+      authorization: Boolean(authHeader),
+      x_gateway_authorization: Boolean(gatewayAuth),
+    });
 
     const body = req.body as {
       context?: {
@@ -54,7 +57,8 @@ export async function logOndcBppIncoming(
         .json(buildNackResponse({ message: "Invalid Beckn context" }));
     }
 
-    if (!authHeader) {
+    const headerToVerify = authHeader || gatewayAuth;
+    if (!headerToVerify) {
       logOndcBpp("NACK: Authorization header missing");
       return res
         .status(401)
@@ -65,7 +69,14 @@ export async function logOndcBppIncoming(
       (req as { rawBody?: string }).rawBody ||
       JSON.stringify(req.body ?? {});
 
-    const verified = await verifyAuthorizationHeader(authHeader, rawBody);
+    let verified = false;
+    if (authHeader) {
+      verified = await verifyAuthorizationHeader(authHeader, rawBody);
+    }
+    if (!verified && gatewayAuth && gatewayAuth !== authHeader) {
+      logOndcBpp("retry verify with x-gateway-authorization");
+      verified = await verifyAuthorizationHeader(gatewayAuth, rawBody);
+    }
 
     if (!verified) {
       logOndcBpp("NACK: Invalid Authorization Signature");

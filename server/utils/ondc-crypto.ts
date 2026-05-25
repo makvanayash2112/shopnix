@@ -131,19 +131,28 @@ export async function verifyAuthorizationHeader(
       digest,
     });
 
-    let publicKey =
-      getStaticPublicKey(subscriberId, uniqueKeyId) ??
-      (await fetchPublicKey(subscriberId, uniqueKeyId));
+    const staticKey = getStaticPublicKey(subscriberId, uniqueKeyId);
+    const registryKey = staticKey
+      ? null
+      : await fetchPublicKey(subscriberId, uniqueKeyId);
+    const publicKey = staticKey ?? registryKey;
+    const keySource = staticKey ? "static" : registryKey ? "registry" : "none";
 
     if (!publicKey) {
-      logOndcBpp("verify FAIL: no public key from registry", {
+      logOndcBpp("verify FAIL: no public key", {
         subscriberId,
         uniqueKeyId,
+        keySource,
       });
       return false;
     }
 
-    logOndcBpp("verify using public key", publicKey.slice(0, 12) + "...");
+    logOndcBpp("verify using public key", {
+      source: keySource,
+      prefix: publicKey.slice(0, 12) + "...",
+      subscriberId,
+      uniqueKeyId,
+    });
 
     const verified = sodium.crypto_sign_verify_detached(
       sodium.from_base64(signature, sodium.base64_variants.ORIGINAL),

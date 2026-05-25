@@ -1,22 +1,17 @@
 /**
- * Fallback public keys for staging / Pramaan when registry lookup is slow.
- * Add entries from ONDC portal or registry lookup response.
- * Key format: "subscriberId|uniqueKeyId" or "subscriberId"
+ * Optional fallback public keys when registry lookup is unavailable.
+ * Format: "subscriberId|uniqueKeyId" → base64 public key (NEVER use your own BPP key here).
  */
 const STATIC_KEYS: Record<string, string> = {
-  "pramaan.ondc.org/beta/preprod/mock/buyer":
-    "VeKKg8tUxcZ00SB1tvkwYDrZ2VnQ0rQ4c/KyzyBVMMY=",
-  "pp-ondc-buyer.digicraft.ai":
-    "VeKKg8tUxcZ00SB1tvkwYDrZ2VnQ0rQ4c/KyzyBVMMY=",
+  // Add only verified third-party keys, e.g.:
+  // "pramaan.ondc.org/beta/preprod/mock/buyer|df0b5672-27f0-42c4-90b5-9138e3c45a79": "<their-public-key>",
 };
 
 export function getStaticPublicKey(
   subscriberId: string,
   uniqueKeyId?: string
 ): string | null {
-  const composite = uniqueKeyId ? `${subscriberId}|${uniqueKeyId}` : "";
-  if (composite && STATIC_KEYS[composite]) {
-    return STATIC_KEYS[composite];
-  }
-  return STATIC_KEYS[subscriberId] ?? null;
+  if (!uniqueKeyId) return null;
+  const composite = `${subscriberId}|${uniqueKeyId}`;
+  return STATIC_KEYS[composite] ?? null;
 }

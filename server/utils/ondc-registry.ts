@@ -11,6 +11,39 @@ function cacheKey(subscriberId: string, uniqueKeyId?: string) {
   return `${subscriberId}|${uniqueKeyId ?? ""}`;
 }
 
+async function registryLookup(
+  payload: Record<string, string>
+): Promise<string | null> {
+  const body = JSON.stringify(payload);
+  const authHeader = await createAuthorizationHeader(body);
+
+  const response = await axios.post(REGISTRY_URL, body, {
+    headers: {
+      "content-type": "application/json",
+      authorization: authHeader,
+      accept: "application/json",
+    },
+    timeout: 15000,
+    transformRequest: [(data) => data],
+  });
+
+  const data = response.data;
+  logOndcBpp("registry lookup OK", {
+    payload,
+    status: response.status,
+    count: Array.isArray(data) ? data.length : 0,
+  });
+
+  if (Array.isArray(data) && data.length > 0) {
+    const publicKey = data[0]?.signing_public_key as string | undefined;
+    if (publicKey) {
+      logOndcBpp("registry public key", publicKey);
+      return publicKey;
+    }
+  }
+  return null;
+}
+
 export async function fetchPublicKey(
   subscriberId: string,
   uniqueKeyId?: string
@@ -22,62 +55,41 @@ export async function fetchPublicKey(
     return cached;
   }
 
-  const payload: Record<string, string> = {
+  const base: Record<string, string> = {
     country: env.ondc.country,
-    domain: env.ondc.domain,
     subscriber_id: subscriberId,
   };
-
   if (uniqueKeyId) {
-    payload.unique_key_id = uniqueKeyId;
+    base.unique_key_id = uniqueKeyId;
   }
 
-  const body = JSON.stringify(payload);
+  const attempts: Record<string, string>[] = [
+    { ...base, domain: env.ondc.domain },
+    { ...base },
+  ];
 
-  logOndcBpp("registry lookup request", {
-    url: REGISTRY_URL,
-    payload,
-    ourSubscriberId: env.ondc.subscriberId,
-    ourUniqueKeyId: env.ondc.uniqueKeyId,
-  });
-
-  try {
-    const authHeader = await createAuthorizationHeader(body);
-
-    const response = await axios.post(REGISTRY_URL, body, {
-      headers: {
-        "content-type": "application/json",
-        authorization: authHeader,
-        accept: "application/json",
-      },
-      timeout: 15000,
-      transformRequest: [(data) => data],
-    });
-
-    const data = response.data;
-    logOndcBpp("registry lookup OK", { status: response.status, count: Array.isArray(data) ? data.length : 0 });
-
-    if (Array.isArray(data) && data.length > 0) {
-      const publicKey = data[0]?.signing_public_key as string | undefined;
+  for (const payload of attempts) {
+    logOndcBpp("registry lookup request", { url: REGISTRY_URL, payload });
+    try {
+      const publicKey = await registryLookup(payload);
       if (publicKey) {
         keyCache.set(ck, publicKey);
-        logOndcBpp("registry public key", publicKey);
         return publicKey;
       }
+    } catch (err: unknown) {
+      const ax = err as {
+        response?: { status?: number; data?: unknown };
+        message?: string;
+      };
+      logOndcBpp("registry lookup FAILED", {
+        payload,
+        status: ax.response?.status,
+        data: ax.response?.data,
+        message: ax.message,
+      });
     }
-
-    logOndcBpp("registry: no signing_public_key in response");
-    return null;
-  } catch (err: unknown) {
-    const ax = err as {
-      response?: { status?: number; data?: unknown };
-      message?: string;
-    };
-    logOndcBpp("registry lookup FAILED", {
-      status: ax.response?.status,
-      data: ax.response?.data,
-      message: ax.message,
-    });
-    return null;
   }
+
+  logOndcBpp("registry: no signing_public_key found", { subscriberId, uniqueKeyId });
+  return null;
 }
