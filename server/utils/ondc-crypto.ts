@@ -143,39 +143,103 @@ export async function createAuthorizationHeader(
   console.log("SIGNING STRING:");
   console.log(signingString);
 
-  const privateKey =
+  // const privateKey =
+  //   sodium.from_base64(
+  //     env.ondc.signingPrivateKey,
+  //     sodium.base64_variants.ORIGINAL
+  //   );
+
+  //   console.log(
+  //   "SUBSCRIBER ID:",
+  //   env.ondc.subscriberId
+  // );
+
+  // console.log(
+  //   "UKID:",
+  //   env.ondc.uniqueKeyId
+  // );
+
+  // console.log(
+  //   "PRIVATE KEY:",
+  //   env.ondc.signingPrivateKey
+  // );
+
+  // console.log("sodium private key:", privateKey);
+
+  // console.log(
+  //   "PRIVATE KEY LENGTH:",
+  //   privateKey.length
+  // );
+
+  // if (privateKey.length !== 64) {
+  //   throw new Error(
+  //     `ONDC private key must be 64 bytes. Current: ${privateKey.length}`
+  //   );
+  // }
+
+  // const signatureBytes =
+  //   sodium.crypto_sign_detached(
+  //     sodium.from_string(signingString),
+  //     privateKey
+  //   );
+
+
+  const key =
     sodium.from_base64(
       env.ondc.signingPrivateKey,
       sodium.base64_variants.ORIGINAL
     );
 
-    console.log(
-    "SUBSCRIBER ID:",
-    env.ondc.subscriberId
-  );
+  console.log("KEY LENGTH:", key.length);
 
-  console.log(
-    "UKID:",
-    env.ondc.uniqueKeyId
-  );
+  let privateKey: Uint8Array;
 
-  console.log(
-    "PRIVATE KEY:",
-    env.ondc.signingPrivateKey
-  );
+  if (key.length === 64) {
 
-  console.log("sodium private key:", privateKey);
+    // USE FIRST 32 BYTES AS SEED
+    const seed = key.slice(0, 32);
 
-  console.log(
-    "PRIVATE KEY LENGTH:",
-    privateKey.length
-  );
+    const keyPair =
+      sodium.crypto_sign_seed_keypair(seed);
 
-  if (privateKey.length !== 64) {
+    privateKey = keyPair.privateKey;
+
+  } else if (key.length === 32) {
+
+    const keyPair =
+      sodium.crypto_sign_seed_keypair(key);
+
+    privateKey = keyPair.privateKey;
+
+  } else {
+
     throw new Error(
-      `ONDC private key must be 64 bytes. Current: ${privateKey.length}`
+      `Invalid private key length: ${key.length}`
     );
   }
+
+  console.log("PRIVATE KEY:", env.ondc.signingPrivateKey);
+  console.log("PRIVATE KEY LENGTH:", privateKey.length);
+  console.log("PRIVATE KEY (base64):", sodium.to_base64(privateKey, sodium.base64_variants.ORIGINAL));
+  console.log("PRIVATE KEY (hex):", sodium.to_hex(privateKey));
+  console.log("PRIVATE KEY (raw):", privateKey);
+  console.log("PRIVATE KEY (raw length):", privateKey.length);
+  console.log("PRIVATE KEY (first 32 bytes as seed, base64):", sodium.to_base64(privateKey.slice(0, 32), sodium.base64_variants.ORIGINAL));
+  console.log("PRIVATE KEY (first 32 bytes as seed, hex):", sodium.to_hex(privateKey.slice(0, 32)));
+  console.log("PRIVATE KEY (first 32 bytes as seed, raw):", privateKey.slice(0, 32));
+  console.log("PRIVATE KEY (first 32 bytes as seed, raw length):", privateKey.slice(0, 32).length);
+  console.log("PRIVATE KEY (last 32 bytes, base64):", sodium.to_base64(privateKey.slice(32), sodium.base64_variants.ORIGINAL));
+  console.log("PRIVATE KEY (last 32 bytes, hex):", sodium.to_hex(privateKey.slice(32)));
+  console.log("PRIVATE KEY (last 32 bytes, raw):", privateKey.slice(32));
+  console.log("PRIVATE KEY (last 32 bytes, raw length):", privateKey.slice(32).length);
+  console.log("uniqueKeyId:", env.ondc.uniqueKeyId);
+  console.log("subscriberId:", env.ondc.subscriberId);
+  console.log("signingString:", signingString);
+  console.log("sodium:", sodium);
+  console.log("sodium ready:", sodium.ready);
+  console.log("sodium crypto_sign_BYTES:", sodium.crypto_sign_BYTES);
+  console.log("sodium crypto_sign_PUBLICKEYBYTES:", sodium.crypto_sign_PUBLICKEYBYTES);
+  console.log("sodium crypto_sign_SECRETKEYBYTES:", sodium.crypto_sign_SECRETKEYBYTES);
 
   const signatureBytes =
     sodium.crypto_sign_detached(
@@ -322,10 +386,10 @@ export async function verifyAuthorizationHeader(
         uniqueKeyId
       );
 
-      console.log(
-        "FETCHED PUBLIC KEY:",
-        publicKey
-      );
+    console.log(
+      "FETCHED PUBLIC KEY:",
+      publicKey
+    );
 
     if (!publicKey) {
 
