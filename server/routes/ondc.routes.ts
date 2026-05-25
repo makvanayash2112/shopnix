@@ -281,7 +281,7 @@ router.post("/select", async (req, res) => {
       if (!seller && providerId.toUpperCase().startsWith("SHOPNIX_")) {
         const suffix = providerId.slice(-8);
         seller = await Seller.findOne({
-          _id: { $regex: new RegExp(`${suffix}$`, "i") },
+          ondcProviderId: { $regex: new RegExp(`${suffix}$`, "i") },
           "ondc.isActive": { $ne: false },
         });
       }
