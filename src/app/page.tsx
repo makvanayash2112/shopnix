@@ -9,22 +9,17 @@ export default function HomePage() {
           <p className="text-xs uppercase tracking-widest text-emerald-400">
             Shopnix ONDC
           </p>
-          <h1 className="text-xl font-bold">Buyer + Seller Platform</h1>
+          <h1 className="text-xl font-bold">Seller Network Platform</h1>
         </div>
         <div className="flex flex-wrap gap-3">
-          <Link href="/shop">
-            <Button className="bg-indigo-500 hover:bg-indigo-600">
-              Buyer shop
-            </Button>
-          </Link>
-          <Link href="/shop/login">
-            <Button variant="ghost" className="text-white hover:bg-white/10">
-              Buyer login
-            </Button>
-          </Link>
           <Link href="/login">
             <Button variant="ghost" className="text-white hover:bg-white/10">
               Seller login
+            </Button>
+          </Link>
+          <Link href="/register">
+            <Button className="bg-emerald-500 hover:bg-emerald-600">
+              Register seller
             </Button>
           </Link>
         </div>
@@ -33,27 +28,21 @@ export default function HomePage() {
       <main className="mx-auto max-w-6xl px-6 py-16">
         <div className="max-w-2xl">
           <h2 className="text-4xl font-bold leading-tight sm:text-5xl">
-            Buy & sell on ONDC — cash delivery, full catalog
+            Sell on ONDC — automated product sync & order management
           </h2>
           <p className="mt-6 text-lg text-slate-300">
-            Buyers browse electronics, grocery, fashion and more. Sellers manage
-            products, orders, and ONDC BPP/BAP from one project. Payment is cash
-            on delivery only.
+            Create your seller account, add products, and automatically list them on the ONDC
+            network. Your products sync instantly to all ONDC buyers. Cash on delivery payments.
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
-            <Link href="/shop">
-              <Button className="bg-indigo-500 px-6 py-3 text-base hover:bg-indigo-600">
-                Open buyer store
-              </Button>
-            </Link>
             <Link href="/admin">
-              <Button variant="secondary" className="px-6 py-3 text-base">
-                Seller admin
+              <Button className="bg-emerald-500 px-6 py-3 text-base hover:bg-emerald-600">
+                Go to seller dashboard
               </Button>
             </Link>
             <Link href="/register">
-              <Button variant="ghost" className="text-white hover:bg-white/10">
-                Register as seller
+              <Button variant="secondary" className="px-6 py-3 text-base">
+                Create seller account
               </Button>
             </Link>
           </div>
@@ -62,19 +51,19 @@ export default function HomePage() {
         <div className="mt-20 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[
             {
-              title: "Buyer storefront",
-              desc: "Categories, multi-image products, cart, COD checkout.",
-              href: "/shop",
-            },
-            {
-              title: "Seller admin",
-              desc: "Products, orders, store & ONDC BPP settings.",
+              title: "Seller dashboard",
+              desc: "Manage products, orders, and store profile. Track ONDC listings in real-time.",
               href: "/admin",
             },
             {
-              title: "ONDC ready",
-              desc: "BPP seller APIs + BAP buyer network hooks.",
-              href: "/admin/ondc",
+              title: "Product catalog",
+              desc: "Add, edit, and publish products to ONDC network automatically.",
+              href: "/admin/products",
+            },
+            {
+              title: "Order management",
+              desc: "View and manage orders from ONDC buyers. Cash on delivery integration.",
+              href: "/admin/orders",
             },
           ].map((f) => (
             <Link

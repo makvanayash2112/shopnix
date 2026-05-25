@@ -1,22 +1,12 @@
-import { CartProvider } from "@/lib/cart";
-import { BuyerAuthProvider } from "@/lib/buyer-auth";
-import { ShopHeader } from "@/components/shop/ShopHeader";
-import { ShopFooter } from "@/components/shop/ShopFooter";
+import { redirect } from "next/navigation";
 
+// DISABLED: Buyer functionality is not supported in this version
+// All buyer-side code is commented out - seller-only mode
 export default function ShopLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-  return (
-    <BuyerAuthProvider>
-      <CartProvider>
-        <div className="flex min-h-screen flex-col bg-slate-50">
-          <ShopHeader />
-          <div className="flex-1">{children}</div>
-          <ShopFooter />
-        </div>
-      </CartProvider>
-    </BuyerAuthProvider>
-  );
+  // Redirect all shop/buyer routes to admin
+  redirect("/admin");
 }

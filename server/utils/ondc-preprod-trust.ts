@@ -25,20 +25,47 @@ export function isPreprodTrustSearchEnabled(): boolean {
   if (process.env.ONDC_PREPROD_TRUST_SEARCH === "false") return false;
   if (process.env.ONDC_PREPROD_TRUST_SEARCH === "true") return true;
   // Default: trust on Vercel preprod deploys until registry v2 lookup works
-  return Boolean(process.env.VERCEL);
+  // Also enable by default in development environments
+  const enabled = Boolean(process.env.VERCEL) || process.env.NODE_ENV !== "production";
+  logOndcBpp("isPreprodTrustSearchEnabled", {
+    enabled,
+    vercel: Boolean(process.env.VERCEL),
+    nodeEnv: process.env.NODE_ENV,
+  });
+  return enabled;
 }
 
 /**
- * Accept Pramaan / GCR / gateway search when registry lookup is blocked (1010/403).
+ * Accept Pramaan / GCR / gateway requests when registry lookup is blocked (1010/403).
  * Shopnix keys are valid on portal but not yet authorized for registry v2 /lookup.
+ * Now supports all Beckn actions (search, select, init, confirm, status, track, cancel, etc)
  */
 export function isPreprodTrustedSearch(req: Request): boolean {
-  if (!isPreprodTrustSearchEnabled()) return false;
-
+  const enabledCheck = isPreprodTrustSearchEnabled();
+  
   const body = req.body as {
     context?: { action?: string; bap_id?: string };
   };
-  if (body?.context?.action !== "search") return false;
+  const action = body?.context?.action;
+  
+  logOndcBpp("isPreprodTrustedSearch check", {
+    enabled: enabledCheck,
+    action,
+    hasBapId: Boolean(body?.context?.bap_id),
+    bapId: body?.context?.bap_id,
+  });
+
+  if (!enabledCheck) {
+    logOndcBpp("isPreprodTrustedSearch: preprod trust disabled");
+    return false;
+  }
+
+  // Support all Beckn actions from trusted sources (not just 'search')
+  // Valid actions: search, select, init, confirm, status, track, cancel, update, rating, support
+  if (!action) {
+    logOndcBpp("isPreprodTrustedSearch: no action found");
+    return false;
+  }
 
   const gatewayAuth = (req.headers["x-gateway-authorization"] ||
     req.headers["X-Gateway-Authorization"]) as string | undefined;
@@ -49,6 +76,14 @@ export function isPreprodTrustedSearch(req: Request): boolean {
   const authSub = parseKeyIdSubscriber(authHeader);
   const bapId = body.context?.bap_id;
 
+  logOndcBpp("isPreprodTrustedSearch sources", {
+    gatewaySub,
+    authSub,
+    bapId,
+    gatewayAuthPresent: Boolean(gatewayAuth),
+    authHeaderPresent: Boolean(authHeader),
+  });
+
   const trusted =
     (gatewaySub && TRUSTED_GATEWAY_SUBSCRIBERS.has(gatewaySub)) ||
     (authSub && TRUSTED_GATEWAY_SUBSCRIBERS.has(authSub)) ||
@@ -56,11 +91,19 @@ export function isPreprodTrustedSearch(req: Request): boolean {
     (bapId && TRUSTED_BAP_IDS.has(bapId));
 
   if (trusted) {
-    logOndcBpp("PREPROD trusted search", {
+    logOndcBpp(`PREPROD trusted ${action}`, {
       gatewaySub,
       authSub,
       bapId,
-      note: "Registry v2 lookup unavailable (1010) — accepting search for Pramaan/GCR",
+      note: "Registry v2 lookup unavailable (1010) — accepting request for Pramaan/GCR",
+    });
+  } else {
+    logOndcBpp(`isPreprodTrustedSearch: no match for ${action}`, {
+      gatewaySub,
+      authSub,
+      bapId,
+      trustedGateways: Array.from(TRUSTED_GATEWAY_SUBSCRIBERS),
+      trustedBaps: Array.from(TRUSTED_BAP_IDS),
     });
   }
 

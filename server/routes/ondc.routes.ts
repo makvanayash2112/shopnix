@@ -18,6 +18,7 @@ import {
   useMsnCatalog,
 } from "../services/ondc/catalog.service";
 import { getPrimarySeller } from "../services/seller.service";
+import { Product, type IProduct } from "../models/Product";
 import {
   buildOrderMessage,
   createOrderFromInit,
@@ -264,8 +265,41 @@ router.post("/select", async (req, res) => {
 
   await ackAfterWork(res, "select", async () => {
     const order = await findOrderByTransaction(body.context.transaction_id);
-    const { seller, products } = await getPublishedCatalog();
-    if (!seller) return;
+    
+    // Extract provider ID from request to identify which seller
+    const providerId = (body.message?.order as { provider?: { id?: string } })?.provider?.id;
+    
+    let seller = null;
+    let products: IProduct[] = [];
+    
+    if (providerId) {
+      // Find seller by ONDC provider ID
+      seller = await (await import("../models/Seller")).Seller.findOne({
+        ondcProviderId: providerId,
+        "ondc.isActive": { $ne: false },
+      });
+      
+      if (seller) {
+        products = await Product.find({
+          sellerId: seller._id,
+          isPublished: true,
+          quantity: { $gt: 0 },
+        });
+      }
+    } else {
+      // Fallback to first seller (legacy behavior for single-seller setup)
+      const result = await getPublishedCatalog();
+      seller = result.seller;
+      products = result.products;
+    }
+    
+    if (!seller) {
+      logOndcBpp("select error: no seller found", {
+        providerId,
+        transaction_id: body.context?.transaction_id,
+      });
+      return;
+    }
 
     const selectItems =
       (body.message?.order as { items?: { id: string }[] })?.items ?? [];
@@ -274,6 +308,14 @@ router.post("/select", async (req, res) => {
     );
     const context = replyContext(body.context, "on_select");
     const quoteValue = matched.reduce((s, p) => s + p.price, 0);
+
+    logOndcBpp("select matched items", {
+      transaction_id: context.transaction_id,
+      sellerId: seller._id,
+      provider: seller.ondcProviderId,
+      requestedItems: selectItems.length,
+      matchedItems: matched.length,
+    });
 
     await postToBap(context, "on_select", {
       order: {
