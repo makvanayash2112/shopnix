@@ -70,12 +70,13 @@ export async function logOndcBppIncoming(
       JSON.stringify(req.body ?? {});
 
     let verified = false;
-    if (authHeader) {
-      verified = await verifyAuthorizationHeader(authHeader, rawBody);
-    }
-    if (!verified && gatewayAuth && gatewayAuth !== authHeader) {
-      logOndcBpp("retry verify with x-gateway-authorization");
+    if (gatewayAuth) {
+      logOndcBpp("verify x-gateway-authorization first");
       verified = await verifyAuthorizationHeader(gatewayAuth, rawBody);
+    }
+    if (!verified && authHeader && authHeader !== gatewayAuth) {
+      logOndcBpp("verify Authorization header");
+      verified = await verifyAuthorizationHeader(authHeader, rawBody);
     }
 
     if (!verified) {

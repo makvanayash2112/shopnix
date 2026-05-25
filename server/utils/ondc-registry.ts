@@ -1,9 +1,10 @@
 import axios from "axios";
 import { env } from "../config/env";
-import { createAuthorizationHeader } from "./ondc-crypto";
+import { createRegistryAuthorizationHeader } from "./ondc-crypto";
 import { logOndcBpp } from "./ondc-debug";
 
-const REGISTRY_URL = "https://preprod.registry.ondc.org/v2.0/lookup";
+const REGISTRY_V2_URL = "https://preprod.registry.ondc.org/v2.0/lookup";
+const REGISTRY_LEGACY_URL = "https://preprod.registry.ondc.org/ondc/lookup";
 
 const keyCache = new Map<string, string>();
 
@@ -11,13 +12,13 @@ function cacheKey(subscriberId: string, uniqueKeyId?: string) {
   return `${subscriberId}|${uniqueKeyId ?? ""}`;
 }
 
-async function registryLookup(
+async function registryV2Lookup(
   payload: Record<string, string>
 ): Promise<string | null> {
   const body = JSON.stringify(payload);
-  const authHeader = await createAuthorizationHeader(body);
+  const authHeader = await createRegistryAuthorizationHeader(body);
 
-  const response = await axios.post(REGISTRY_URL, body, {
+  const response = await axios.post(REGISTRY_V2_URL, body, {
     headers: {
       "content-type": "application/json",
       authorization: authHeader,
@@ -28,7 +29,7 @@ async function registryLookup(
   });
 
   const data = response.data;
-  logOndcBpp("registry lookup OK", {
+  logOndcBpp("registry v2 lookup OK", {
     payload,
     status: response.status,
     count: Array.isArray(data) ? data.length : 0,
@@ -37,7 +38,33 @@ async function registryLookup(
   if (Array.isArray(data) && data.length > 0) {
     const publicKey = data[0]?.signing_public_key as string | undefined;
     if (publicKey) {
-      logOndcBpp("registry public key", publicKey);
+      logOndcBpp("registry v2 public key", publicKey);
+      return publicKey;
+    }
+  }
+  return null;
+}
+
+/** Deprecated lookup — no auth; fallback when v2 fails */
+async function registryLegacyLookup(
+  payload: Record<string, string>
+): Promise<string | null> {
+  const response = await axios.post(REGISTRY_LEGACY_URL, payload, {
+    headers: { "content-type": "application/json", accept: "application/json" },
+    timeout: 15000,
+  });
+
+  const data = response.data;
+  logOndcBpp("registry legacy lookup OK", {
+    payload,
+    status: response.status,
+    count: Array.isArray(data) ? data.length : 0,
+  });
+
+  if (Array.isArray(data) && data.length > 0) {
+    const publicKey = data[0]?.signing_public_key as string | undefined;
+    if (publicKey) {
+      logOndcBpp("registry legacy public key", publicKey);
       return publicKey;
     }
   }
@@ -63,15 +90,15 @@ export async function fetchPublicKey(
     base.unique_key_id = uniqueKeyId;
   }
 
-  const attempts: Record<string, string>[] = [
+  const v2Attempts: Record<string, string>[] = [
     { ...base, domain: env.ondc.domain },
     { ...base },
   ];
 
-  for (const payload of attempts) {
-    logOndcBpp("registry lookup request", { url: REGISTRY_URL, payload });
+  for (const payload of v2Attempts) {
+    logOndcBpp("registry v2 lookup request", { url: REGISTRY_V2_URL, payload });
     try {
-      const publicKey = await registryLookup(payload);
+      const publicKey = await registryV2Lookup(payload);
       if (publicKey) {
         keyCache.set(ck, publicKey);
         return publicKey;
@@ -81,7 +108,7 @@ export async function fetchPublicKey(
         response?: { status?: number; data?: unknown };
         message?: string;
       };
-      logOndcBpp("registry lookup FAILED", {
+      logOndcBpp("registry v2 lookup FAILED", {
         payload,
         status: ax.response?.status,
         data: ax.response?.data,
@@ -90,6 +117,40 @@ export async function fetchPublicKey(
     }
   }
 
-  logOndcBpp("registry: no signing_public_key found", { subscriberId, uniqueKeyId });
+  const legacyPayload: Record<string, string> = {
+    country: env.ondc.country,
+    domain: env.ondc.domain,
+    subscriber_id: subscriberId,
+  };
+  if (uniqueKeyId) {
+    legacyPayload.unique_key_id = uniqueKeyId;
+  }
+
+  logOndcBpp("registry legacy lookup request", {
+    url: REGISTRY_LEGACY_URL,
+    payload: legacyPayload,
+  });
+  try {
+    const publicKey = await registryLegacyLookup(legacyPayload);
+    if (publicKey) {
+      keyCache.set(ck, publicKey);
+      return publicKey;
+    }
+  } catch (err: unknown) {
+    const ax = err as {
+      response?: { status?: number; data?: unknown };
+      message?: string;
+    };
+    logOndcBpp("registry legacy lookup FAILED", {
+      status: ax.response?.status,
+      data: ax.response?.data,
+      message: ax.message,
+    });
+  }
+
+  logOndcBpp("registry: no signing_public_key found", {
+    subscriberId,
+    uniqueKeyId,
+  });
   return null;
 }

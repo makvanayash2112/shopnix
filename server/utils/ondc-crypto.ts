@@ -5,12 +5,42 @@ import { fetchPublicKey } from "./ondc-registry";
 import { getStaticPublicKey } from "./ondc-public-keys";
 import { deriveSigningPublicKey, logOndcBpp } from "./ondc-debug";
 
-function createDigest(body: string) {
-  const hash = crypto
-    .createHash("sha256")
-    .update(body, "utf8")
-    .digest("base64");
-  return `SHA-256=${hash}`;
+type DigestAlgo = "SHA-256" | "BLAKE-512";
+
+async function createBodyDigest(
+  body: string,
+  algo: DigestAlgo
+): Promise<string> {
+  if (algo === "SHA-256") {
+    const hash = crypto
+      .createHash("sha256")
+      .update(body, "utf8")
+      .digest("base64");
+    return `SHA-256=${hash}`;
+  }
+  await sodium.ready;
+  const hashBytes = sodium.crypto_generichash(
+    64,
+    sodium.from_string(body),
+    null
+  );
+  const hash = sodium.to_base64(
+    hashBytes,
+    sodium.base64_variants.ORIGINAL
+  );
+  return `BLAKE-512=${hash}`;
+}
+
+function buildSigningString(
+  created: string,
+  expires: string,
+  digest: string,
+  style: "beckn" | "registry"
+): string {
+  if (style === "registry") {
+    return `(created): ${created}\n(expires):${expires}\ndigest:${digest}`;
+  }
+  return `(created): ${created}\n(expires): ${expires}\ndigest: ${digest}`;
 }
 
 function assertSigningConfig() {
@@ -33,18 +63,26 @@ function assertSigningConfig() {
   return { subscriberId, uniqueKeyId, privateKey };
 }
 
-export async function createAuthorizationHeader(body: string): Promise<string> {
+async function signBody(
+  body: string,
+  options: {
+    digestAlgo: DigestAlgo;
+    headerStyle: "beckn" | "registry";
+    logTag: string;
+  }
+): Promise<string> {
   const { subscriberId, uniqueKeyId, privateKey } = assertSigningConfig();
-
   await sodium.ready;
 
   const created = Math.floor(Date.now() / 1000);
   const expires = created + 300;
-  const digest = createDigest(body);
-  const signingString =
-    `(created): ${created}\n` +
-    `(expires): ${expires}\n` +
-    `digest: ${digest}`;
+  const digest = await createBodyDigest(body, options.digestAlgo);
+  const signingString = buildSigningString(
+    String(created),
+    String(expires),
+    digest,
+    options.headerStyle
+  );
 
   const keyBytes = sodium.from_base64(
     privateKey,
@@ -67,19 +105,43 @@ export async function createAuthorizationHeader(body: string): Promise<string> {
     sodium.base64_variants.ORIGINAL
   );
 
-  const header = `Signature keyId="${subscriberId}|${uniqueKeyId}|ed25519",algorithm="ed25519",created="${created}",expires="${expires}",headers="(created) (expires) digest",signature="${signature}"`;
+  const headersAttr =
+    options.headerStyle === "registry"
+      ? "(created)(expires)digest"
+      : "(created) (expires) digest";
 
-  logOndcBpp("createAuthorizationHeader", {
+  const header = `Signature keyId="${subscriberId}|${uniqueKeyId}|ed25519",algorithm="ed25519",created="${created}",expires="${expires}",headers="${headersAttr}",signature="${signature}"`;
+
+  logOndcBpp(options.logTag, {
     subscriberId,
     uniqueKeyId,
-    created,
-    expires,
+    digestAlgo: options.digestAlgo,
+    headerStyle: options.headerStyle,
     digest,
     bodyLength: body.length,
-    keyId: `${subscriberId}|${uniqueKeyId}|ed25519`,
   });
 
   return header;
+}
+
+/** Beckn protocol 1.2 — SHA-256 (outgoing on_search, etc.) */
+export async function createAuthorizationHeader(body: string): Promise<string> {
+  return signBody(body, {
+    digestAlgo: "SHA-256",
+    headerStyle: "beckn",
+    logTag: "createAuthorizationHeader (beckn)",
+  });
+}
+
+/** ONDC registry v2.0/lookup — BLAKE-512 per official docs */
+export async function createRegistryAuthorizationHeader(
+  body: string
+): Promise<string> {
+  return signBody(body, {
+    digestAlgo: "BLAKE-512",
+    headerStyle: "registry",
+    logTag: "createRegistryAuthorizationHeader",
+  });
 }
 
 export async function verifyAuthorizationHeader(
@@ -118,17 +180,10 @@ export async function verifyAuthorizationHeader(
       return false;
     }
 
-    const digest = createDigest(rawBody);
-    const signingString =
-      `(created): ${created}\n` +
-      `(expires): ${expires}\n` +
-      `digest: ${digest}`;
-
     logOndcBpp("verify incoming", {
       subscriberId,
       uniqueKeyId,
       rawBodyLength: rawBody.length,
-      digest,
     });
 
     const staticKey = getStaticPublicKey(subscriberId, uniqueKeyId);
@@ -150,18 +205,42 @@ export async function verifyAuthorizationHeader(
     logOndcBpp("verify using public key", {
       source: keySource,
       prefix: publicKey.slice(0, 12) + "...",
-      subscriberId,
-      uniqueKeyId,
     });
 
-    const verified = sodium.crypto_sign_verify_detached(
-      sodium.from_base64(signature, sodium.base64_variants.ORIGINAL),
-      sodium.from_string(signingString),
-      sodium.from_base64(publicKey, sodium.base64_variants.ORIGINAL)
+    const sigBytes = sodium.from_base64(
+      signature,
+      sodium.base64_variants.ORIGINAL
+    );
+    const pubBytes = sodium.from_base64(
+      publicKey,
+      sodium.base64_variants.ORIGINAL
     );
 
-    logOndcBpp("verify result", { subscriberId, verified });
-    return verified;
+    const attempts: { algo: DigestAlgo; style: "beckn" | "registry" }[] = [
+      { algo: "SHA-256", style: "beckn" },
+      { algo: "SHA-256", style: "registry" },
+      { algo: "BLAKE-512", style: "registry" },
+      { algo: "BLAKE-512", style: "beckn" },
+    ];
+
+    for (const { algo, style } of attempts) {
+      const digest = await createBodyDigest(rawBody, algo);
+      const signingString = buildSigningString(created, expires, digest, style);
+      const verified = sodium.crypto_sign_verify_detached(
+        sigBytes,
+        sodium.from_string(signingString),
+        pubBytes
+      );
+      if (verified) {
+        logOndcBpp("verify result OK", { subscriberId, algo, style });
+        return true;
+      }
+    }
+
+    logOndcBpp("verify result FAILED (all digest/style attempts)", {
+      subscriberId,
+    });
+    return false;
   } catch (err) {
     logOndcBpp("verify ERROR", err);
     return false;
