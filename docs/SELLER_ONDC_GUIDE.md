@@ -56,6 +56,23 @@ Check readiness: **GET `/api/seller/ondc-readiness`** (shown on Settings page).
 
 ---
 
+## Pramaan: “Waiting for on_search” (logs show ACK)
+
+HTTP **200 + ACK** from Pramaan only means the callback was received. The portal step completes when the **catalog passes schema checks**.
+
+Common fixes (built into Shopnix search catalog):
+
+| Issue | Fix |
+|--------|-----|
+| `http://localhost:4000/...` images in DB | Catalog rewrites to `API_BASE_URL` / Vercel URL; set `API_BASE_URL=https://shopnix-nine.vercel.app` on Vercel |
+| Seller NP test with 2 providers + `MSN` | Default is **SNP** + **one** primary seller; set `ONDC_MSN_CATALOG=true` only for true marketplace |
+| `quantity.available.count` not `99` | ONDC v1.2.0 uses `99` when in stock |
+| Mixed categories on RET10 grocery | Pramaan search sends **grocery** items when available |
+
+After deploy, open `GET /ondc/test-catalog` and confirm image URLs are `https://shopnix-nine.vercel.app/...`, `np_type` is `SNP`, and one provider.
+
+---
+
 ## When products appear on ONDC
 
 1. Seller completes profile (address, phone).  

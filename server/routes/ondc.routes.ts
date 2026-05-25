@@ -13,7 +13,9 @@ import {
   buildCatalogMessage,
   getNetworkCatalogEntries,
   buildMultiSellerCatalogMessage,
+  filterProductsForOndcSearch,
   getPublishedCatalog,
+  useMsnCatalog,
 } from "../services/ondc/catalog.service";
 import { getPrimarySeller } from "../services/seller.service";
 import {
@@ -77,15 +79,32 @@ router.get("/debug-env", async (_req, res) => {
 /** Full ONDC network catalog (all active sellers) */
 router.get("/test-catalog", async (_req, res) => {
   try {
-    const entries = await getNetworkCatalogEntries();
-    const message = buildMultiSellerCatalogMessage(
-      entries,
-      env.apiBaseUrl
-    );
-    const totalProducts = entries.reduce((n, e) => n + e.products.length, 0);
+    const msn = useMsnCatalog();
+    let resolved: Awaited<ReturnType<typeof getNetworkCatalogEntries>> = [];
+    if (msn) {
+      resolved = await getNetworkCatalogEntries();
+    } else {
+      const seller = await getPrimarySeller();
+      if (seller) {
+        const { products } = await getPublishedCatalog(seller._id.toString());
+        resolved = [{ seller, products }];
+      }
+    }
+    const message = msn
+      ? buildMultiSellerCatalogMessage(resolved, env.apiBaseUrl, undefined, "MSN")
+      : resolved[0]
+        ? buildCatalogMessage(
+            resolved[0].seller,
+            resolved[0].products,
+            env.apiBaseUrl,
+            "SNP"
+          )
+        : { catalog: {} };
+    const totalProducts = resolved.reduce((n, e) => n + e.products.length, 0);
     res.json({
       success: true,
-      sellerCount: entries.length,
+      catalogMode: msn ? "MSN" : "SNP",
+      sellerCount: resolved.length,
       productCount: totalProducts,
       catalog: message,
     });
@@ -126,10 +145,42 @@ router.post("/search", async (req, res) => {
       bap_uri: body.context?.bap_uri,
     });
 
-    const entries = await getNetworkCatalogEntries();
+    const msn = useMsnCatalog();
+    let entries: Awaited<ReturnType<typeof getNetworkCatalogEntries>>;
+    let npType: "SNP" | "MSN" = msn ? "MSN" : "SNP";
+
+    if (msn) {
+      entries = await getNetworkCatalogEntries();
+    } else {
+      const seller = await getPrimarySeller();
+      if (!seller) {
+        logOndcBpp("search abort: no primary seller");
+        return;
+      }
+      const { products: raw } = await getPublishedCatalog(seller._id.toString());
+      const products = filterProductsForOndcSearch(
+        raw,
+        body.context?.bap_id,
+        body.context?.domain
+      );
+      entries = [{ seller, products }];
+    }
+
+    entries = entries
+      .map((e) => ({
+        seller: e.seller,
+        products: filterProductsForOndcSearch(
+          e.products,
+          body.context?.bap_id,
+          body.context?.domain
+        ),
+      }))
+      .filter((e) => e.products.length > 0);
+
     const totalProducts = entries.reduce((n, e) => n + e.products.length, 0);
 
     logOndcBpp("network catalog", {
+      mode: npType,
       sellers: entries.map((e) => ({
         store: e.seller.storeName,
         providerId: e.seller.ondcProviderId,
@@ -146,11 +197,19 @@ router.post("/search", async (req, res) => {
     }
 
     const context = replyContext(body.context, "on_search");
-    const message = buildMultiSellerCatalogMessage(entries, env.apiBaseUrl);
+    const message = msn
+      ? buildMultiSellerCatalogMessage(entries, env.apiBaseUrl, undefined, "MSN")
+      : buildCatalogMessage(
+          entries[0].seller,
+          entries[0].products,
+          env.apiBaseUrl,
+          "SNP"
+        );
 
     logOndcBpp("posting on_search", {
       url: `${context.bap_uri?.replace(/\/$/, "")}/on_search`,
       bpp_id: context.bpp_id,
+      np_type: npType,
       sellers: entries.length,
       products: totalProducts,
     });

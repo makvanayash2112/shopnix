@@ -1,11 +1,43 @@
 import { Product } from "../../models/Product";
 import { Seller } from "../../models/Seller";
 import { env } from "../../config/env";
+import {
+  mapOndcCategory,
+  ondcAvailableCount,
+  resolvePublicImageUrl,
+} from "../../constants/ondc-catalog";
 import type { IProduct } from "../../models/Product";
 import type { ISeller } from "../../models/Seller";
 
 const MAX_PRODUCTS_PER_SELLER = 50;
 const MAX_SELLERS_ON_NETWORK = 20;
+
+export type CatalogNpType = "SNP" | "MSN";
+
+function isPramaanOrGcrBap(bapId?: string): boolean {
+  if (!bapId) return false;
+  const id = bapId.toLowerCase();
+  return id.includes("pramaan") || id.includes("mock/buyer");
+}
+
+/** Pramaan RET10 grocery flows: prefer grocery items; avoid empty catalog. */
+export function filterProductsForOndcSearch(
+  products: IProduct[],
+  bapId?: string,
+  domain?: string
+): IProduct[] {
+  if (domain !== "ONDC:RET10" && !isPramaanOrGcrBap(bapId)) {
+    return products;
+  }
+  const grocery = products.filter((p) => p.categorySlug === "grocery");
+  return grocery.length > 0 ? grocery : products.slice(0, 20);
+}
+
+function defaultItemCode(product: IProduct): string {
+  const digits = product.sku.replace(/\D/g, "").slice(0, 13);
+  const ean = digits.padStart(13, "0").slice(0, 13);
+  return `1:${ean || "8901030895657"}`;
+}
 
 function defaultGps(seller: ISeller): string {
   const pin = seller.address?.pincode || "";
@@ -18,12 +50,24 @@ function defaultGps(seller: ISeller): string {
 function itemDescriptor(
   product: IProduct,
   baseUrl: string,
-  providerId: string,
   locationId: string
 ) {
-  const images = product.images.map((url) => ({
-    url: url.startsWith("http") ? url : `${baseUrl}${url}`,
-  }));
+  const { categoryId } = mapOndcCategory(product.categorySlug);
+  const imageUrls = (product.images.length
+    ? product.images
+    : ["/uploads/products/placeholder.png"]
+  ).map((url) => resolvePublicImageUrl(url, baseUrl));
+  const images = imageUrls.map((url) => ({ url }));
+
+  const unit =
+    product.unit === "kilogram" ||
+    product.unit === "gram" ||
+    product.unit === "litre" ||
+    product.unit === "millilitre" ||
+    product.unit === "dozen" ||
+    product.unit === "tonne"
+      ? product.unit
+      : "unit";
 
   return {
     id: product.ondcItemId,
@@ -31,6 +75,7 @@ function itemDescriptor(
       name: product.name,
       short_desc: product.description?.slice(0, 120) || product.name,
       long_desc: product.description || product.name,
+      code: defaultItemCode(product),
       images,
       symbol: images[0]?.url,
     },
@@ -39,12 +84,15 @@ function itemDescriptor(
       value: String(product.price),
       maximum_value: String(product.mrp || product.price),
     },
-    category_id: product.categorySlug || "grocery",
+    category_id: categoryId,
     fulfillment_ids: ["F1"],
     location_ids: [locationId],
     quantity: {
-      available: { count: String(product.quantity) },
+      available: { count: ondcAvailableCount(product.quantity) },
       maximum: { count: "10" },
+      unitized: {
+        measure: { unit, value: "1" },
+      },
     },
     "@ondc/org/cancellable": true,
     "@ondc/org/returnable": true,
@@ -61,13 +109,18 @@ function buildProviderBlock(
   const providerId =
     seller.ondcProviderId || `SHOPNIX_${seller._id.toString().slice(-8)}`;
   const locationId = `${providerId}-location`;
+  const primaryCategory = mapOndcCategory(
+    products[0]?.categorySlug || "grocery"
+  );
 
   return {
     id: providerId,
     descriptor: {
       name: seller.storeName,
-      short_desc: seller.storeDescription || seller.storeName,
-      long_desc: seller.storeDescription || seller.storeName,
+      short_desc:
+        (seller.storeDescription || seller.storeName).slice(0, 120) ||
+        seller.storeName,
+      long_desc: seller.storeDescription || `${seller.storeName} on Shopnix`,
     },
     locations: [
       {
@@ -86,9 +139,7 @@ function buildProviderBlock(
         },
       },
     ],
-    items: products.map((p) =>
-      itemDescriptor(p, baseUrl, providerId, locationId)
-    ),
+    items: products.map((p) => itemDescriptor(p, baseUrl, locationId)),
     fulfillments: [
       {
         id: "F1",
@@ -104,7 +155,10 @@ function buildProviderBlock(
         code: "serviceability",
         list: [
           { code: "location", value: locationId },
-          { code: "category", value: "Grocery" },
+          {
+            code: "category",
+            value: primaryCategory.serviceabilityCategory,
+          },
           { code: "type", value: "12" },
           { code: "val", value: String(seller.fulfillment?.radiusKm ?? 5) },
           { code: "unit", value: "km" },
@@ -114,24 +168,50 @@ function buildProviderBlock(
   };
 }
 
-/** Single seller catalog (legacy / test-catalog) */
+function bppDescriptor(
+  name: string,
+  shortDesc: string,
+  longDesc: string,
+  baseUrl: string,
+  npType: CatalogNpType
+) {
+  const symbol = resolvePublicImageUrl("/uploads/products/placeholder.png", baseUrl);
+  return {
+    name,
+    short_desc: shortDesc,
+    long_desc: longDesc,
+    symbol,
+    images: [{ url: symbol }],
+    tags: [
+      {
+        code: "bpp_terms",
+        list: [{ code: "np_type", value: npType }],
+      },
+    ],
+  };
+}
+
+/** Single seller catalog — default for Seller NP / Pramaan (SNP, one provider). */
 export function buildCatalogMessage(
   seller: ISeller,
   products: IProduct[],
-  baseUrl: string
+  baseUrl: string,
+  npType: CatalogNpType = "SNP"
 ) {
   return buildMultiSellerCatalogMessage(
     [{ seller, products }],
     baseUrl,
-    seller.storeName
+    seller.storeName,
+    npType
   );
 }
 
-/** MSN-style catalog: all active sellers with published products */
+/** MSN = multi-provider; SNP = single-provider (Pramaan Seller NP). */
 export function buildMultiSellerCatalogMessage(
   entries: { seller: ISeller; products: IProduct[] }[],
   baseUrl: string,
-  networkName?: string
+  networkName?: string,
+  npType: CatalogNpType = "MSN"
 ) {
   const providers = entries
     .filter((e) => e.products.length > 0)
@@ -139,23 +219,34 @@ export function buildMultiSellerCatalogMessage(
 
   const name =
     networkName || env.defaultStoreName || "Shopnix Marketplace";
+  const isSnP = npType === "SNP";
 
   return {
     catalog: {
-      "bpp/descriptor": {
+      "bpp/descriptor": bppDescriptor(
         name,
-        short_desc: "Multi-seller grocery & retail on ONDC",
-        long_desc: "Products from verified Shopnix sellers",
-        tags: [
-          {
-            code: "bpp_terms",
-            list: [{ code: "np_type", value: "MSN" }],
-          },
-        ],
-      },
+        isSnP
+          ? `${name} — retail on ONDC`
+          : "Multi-seller grocery & retail on ONDC",
+        isSnP
+          ? sellerLongDesc(entries[0]?.seller, name)
+          : "Products from verified Shopnix sellers",
+        baseUrl,
+        npType
+      ),
       "bpp/providers": providers,
     },
   };
+}
+
+function sellerLongDesc(seller: ISeller | undefined, fallback: string): string {
+  const d = seller?.storeDescription?.trim();
+  if (d && d !== seller?.storeName) return d;
+  return `${fallback} on ONDC via Shopnix`;
+}
+
+export function useMsnCatalog(): boolean {
+  return process.env.ONDC_MSN_CATALOG === "true";
 }
 
 export async function getPublishedCatalog(sellerId?: string) {

@@ -42,12 +42,24 @@ export async function postToBap(
       transformRequest: [(data) => data],
     });
 
-    const ackStatus = (response.data as { message?: { ack?: { status?: string } } })
-      ?.message?.ack?.status;
-    logOndcBpp(`${action} success`, {
-      status: response.status,
-      ack: ackStatus,
-    });
+    const data = response.data as {
+      message?: { ack?: { status?: string } };
+      error?: unknown;
+    };
+    const ackStatus = data?.message?.ack?.status;
+    if (ackStatus !== "ACK" || data.error) {
+      logOndcBpp(`${action} protocol response`, {
+        status: response.status,
+        ack: ackStatus,
+        error: data.error,
+        body: data,
+      });
+    } else {
+      logOndcBpp(`${action} success`, {
+        status: response.status,
+        ack: ackStatus,
+      });
+    }
     return response.data;
   } catch (err: unknown) {
     const ax = err as {
