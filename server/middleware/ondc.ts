@@ -162,8 +162,15 @@ export async function logOndcIncoming(
     console.log("========== INCOMING HEADERS ==========");
     console.log(req.headers);
 
+    // const authHeader =
+    //   req.headers.authorization || req.headers.Authorization || req.headers["x-gateway-authorization"];
+
+    // const authHeader =
+    //   req.headers.authorization as string;
+
     const authHeader =
-      req.headers.authorization;
+      (req.headers.authorization ||
+        req.headers["authorization"]) as string;
 
     console.log("AUTH HEADER:");
     console.log(authHeader);
