@@ -1,11 +1,29 @@
 /**
- * Optional fallback public keys when registry lookup is unavailable.
- * Format: "subscriberId|uniqueKeyId" → base64 public key (NEVER use your own BPP key here).
+ * Optional override: ONDC_TRUSTED_KEYS_JSON env
+ * [{"subscriberId":"...","uniqueKeyId":"...","publicKey":"base64..."}]
  */
-const STATIC_KEYS: Record<string, string> = {
-  // Add only verified third-party keys, e.g.:
-  // "pramaan.ondc.org/beta/preprod/mock/buyer|df0b5672-27f0-42c4-90b5-9138e3c45a79": "<their-public-key>",
-};
+function loadEnvTrustedKeys(): Record<string, string> {
+  const out: Record<string, string> = {};
+  const raw = process.env.ONDC_TRUSTED_KEYS_JSON;
+  if (!raw) return out;
+  try {
+    const arr = JSON.parse(raw) as {
+      subscriberId: string;
+      uniqueKeyId: string;
+      publicKey: string;
+    }[];
+    for (const row of arr) {
+      if (row.subscriberId && row.uniqueKeyId && row.publicKey) {
+        out[`${row.subscriberId}|${row.uniqueKeyId}`] = row.publicKey;
+      }
+    }
+  } catch {
+    // ignore invalid JSON
+  }
+  return out;
+}
+
+const ENV_TRUSTED = loadEnvTrustedKeys();
 
 export function getStaticPublicKey(
   subscriberId: string,
@@ -13,5 +31,5 @@ export function getStaticPublicKey(
 ): string | null {
   if (!uniqueKeyId) return null;
   const composite = `${subscriberId}|${uniqueKeyId}`;
-  return STATIC_KEYS[composite] ?? null;
+  return ENV_TRUSTED[composite] ?? null;
 }

@@ -7,40 +7,33 @@ import { deriveSigningPublicKey, logOndcBpp } from "./ondc-debug";
 
 type DigestAlgo = "SHA-256" | "BLAKE-512";
 
-async function createBodyDigest(
-  body: string,
-  algo: DigestAlgo
-): Promise<string> {
-  if (algo === "SHA-256") {
-    const hash = crypto
-      .createHash("sha256")
-      .update(body, "utf8")
-      .digest("base64");
-    return `SHA-256=${hash}`;
-  }
-  await sodium.ready;
-  const hashBytes = sodium.crypto_generichash(
-    64,
-    sodium.from_string(body),
-    null
-  );
-  const hash = sodium.to_base64(
-    hashBytes,
-    sodium.base64_variants.ORIGINAL
-  );
-  return `BLAKE-512=${hash}`;
-}
-
-function buildSigningString(
+/** Matches ONDC reference SDK signing string format */
+async function createOndcSigningString(
+  message: string,
   created: string,
   expires: string,
-  digest: string,
-  style: "beckn" | "registry"
-): string {
-  if (style === "registry") {
-    return `(created): ${created}\n(expires):${expires}\ndigest:${digest}`;
+  algo: DigestAlgo
+): Promise<string> {
+  let digestValue: string;
+  if (algo === "SHA-256") {
+    digestValue = crypto
+      .createHash("sha256")
+      .update(message, "utf8")
+      .digest("base64");
+  } else {
+    await sodium.ready;
+    const hashBytes = sodium.crypto_generichash(
+      64,
+      sodium.from_string(message),
+      null
+    );
+    digestValue = sodium.to_base64(
+      hashBytes,
+      sodium.base64_variants.ORIGINAL
+    );
   }
-  return `(created): ${created}\n(expires): ${expires}\ndigest: ${digest}`;
+  const digestLine = `${algo}=${digestValue}`;
+  return `(created): ${created}\n(expires): ${expires}\ndigest: ${digestLine}`;
 }
 
 function assertSigningConfig() {
@@ -63,85 +56,79 @@ function assertSigningConfig() {
   return { subscriberId, uniqueKeyId, privateKey };
 }
 
-async function signBody(
-  body: string,
-  options: {
-    digestAlgo: DigestAlgo;
-    headerStyle: "beckn" | "registry";
-    logTag: string;
-  }
-): Promise<string> {
-  const { subscriberId, uniqueKeyId, privateKey } = assertSigningConfig();
-  await sodium.ready;
-
-  const created = Math.floor(Date.now() / 1000);
-  const expires = created + 300;
-  const digest = await createBodyDigest(body, options.digestAlgo);
-  const signingString = buildSigningString(
-    String(created),
-    String(expires),
-    digest,
-    options.headerStyle
-  );
-
+function getSigningKeyBytes(privateKey: string): Uint8Array {
   const keyBytes = sodium.from_base64(
     privateKey,
     sodium.base64_variants.ORIGINAL
   );
-
-  if (keyBytes.length !== 64) {
-    throw new Error(
-      `Invalid ONDC_SIGNING_PRIVATE_KEY length (${keyBytes.length}). Use npm run ondc:keys`
-    );
+  if (keyBytes.length === 64) return keyBytes;
+  if (keyBytes.length === 32) {
+    return sodium.crypto_sign_seed_keypair(keyBytes).privateKey;
   }
+  throw new Error(
+    `Invalid ONDC_SIGNING_PRIVATE_KEY length (${keyBytes.length}). Use npm run ondc:keys`
+  );
+}
 
-  const signatureBytes = sodium.crypto_sign_detached(
-    sodium.from_string(signingString),
-    keyBytes
+/** Sign per ONDC official Node SDK (BLAKE-512 + headers with spaces) */
+async function signAuthorization(
+  body: string,
+  algo: DigestAlgo,
+  logTag: string
+): Promise<string> {
+  const { subscriberId, uniqueKeyId, privateKey } = assertSigningConfig();
+  await sodium.ready;
+
+  const created = Math.floor(Date.now() / 1000).toString();
+  const expires = (parseInt(created, 10) + 3600).toString();
+  const signingString = await createOndcSigningString(
+    body,
+    created,
+    expires,
+    algo
   );
 
+  const keyBytes = getSigningKeyBytes(privateKey);
+  const signatureBytes = sodium.crypto_sign_detached(
+    signingString,
+    keyBytes
+  );
   const signature = sodium.to_base64(
     signatureBytes,
     sodium.base64_variants.ORIGINAL
   );
 
-  const headersAttr =
-    options.headerStyle === "registry"
-      ? "(created)(expires)digest"
-      : "(created) (expires) digest";
+  const header = `Signature keyId="${subscriberId}|${uniqueKeyId}|ed25519",algorithm="ed25519",created="${created}",expires="${expires}",headers="(created) (expires) digest",signature="${signature}"`;
 
-  const header = `Signature keyId="${subscriberId}|${uniqueKeyId}|ed25519",algorithm="ed25519",created="${created}",expires="${expires}",headers="${headersAttr}",signature="${signature}"`;
-
-  logOndcBpp(options.logTag, {
+  logOndcBpp(logTag, {
     subscriberId,
     uniqueKeyId,
-    digestAlgo: options.digestAlgo,
-    headerStyle: options.headerStyle,
-    digest,
+    algo,
     bodyLength: body.length,
   });
 
   return header;
 }
 
-/** Beckn protocol 1.2 — SHA-256 (outgoing on_search, etc.) */
-export async function createAuthorizationHeader(body: string): Promise<string> {
-  return signBody(body, {
-    digestAlgo: "SHA-256",
-    headerStyle: "beckn",
-    logTag: "createAuthorizationHeader (beckn)",
-  });
+/** Ed25519 sign raw string (vlookup) — no BLAKE digest */
+export async function signRawString(stringToSign: string): Promise<string> {
+  const { privateKey } = assertSigningConfig();
+  await sodium.ready;
+  const keyBytes = getSigningKeyBytes(privateKey);
+  const sig = sodium.crypto_sign_detached(stringToSign, keyBytes);
+  return sodium.to_base64(sig, sodium.base64_variants.ORIGINAL);
 }
 
-/** ONDC registry v2.0/lookup — BLAKE-512 per official docs */
+/** Beckn 1.2 outgoing callbacks — SHA-256 */
+export async function createAuthorizationHeader(body: string): Promise<string> {
+  return signAuthorization(body, "SHA-256", "createAuthorizationHeader");
+}
+
+/** Registry v2.0/lookup — BLAKE-512 (official ONDC SDK format) */
 export async function createRegistryAuthorizationHeader(
   body: string
 ): Promise<string> {
-  return signBody(body, {
-    digestAlgo: "BLAKE-512",
-    headerStyle: "registry",
-    logTag: "createRegistryAuthorizationHeader",
-  });
+  return signAuthorization(body, "BLAKE-512", "createRegistryAuthorizationHeader");
 }
 
 export async function verifyAuthorizationHeader(
@@ -216,30 +203,25 @@ export async function verifyAuthorizationHeader(
       sodium.base64_variants.ORIGINAL
     );
 
-    const attempts: { algo: DigestAlgo; style: "beckn" | "registry" }[] = [
-      { algo: "SHA-256", style: "beckn" },
-      { algo: "SHA-256", style: "registry" },
-      { algo: "BLAKE-512", style: "registry" },
-      { algo: "BLAKE-512", style: "beckn" },
-    ];
-
-    for (const { algo, style } of attempts) {
-      const digest = await createBodyDigest(rawBody, algo);
-      const signingString = buildSigningString(created, expires, digest, style);
+    for (const algo of ["SHA-256", "BLAKE-512"] as DigestAlgo[]) {
+      const signingString = await createOndcSigningString(
+        rawBody,
+        created,
+        expires,
+        algo
+      );
       const verified = sodium.crypto_sign_verify_detached(
         sigBytes,
-        sodium.from_string(signingString),
+        signingString,
         pubBytes
       );
       if (verified) {
-        logOndcBpp("verify result OK", { subscriberId, algo, style });
+        logOndcBpp("verify result OK", { subscriberId, algo });
         return true;
       }
     }
 
-    logOndcBpp("verify result FAILED (all digest/style attempts)", {
-      subscriberId,
-    });
+    logOndcBpp("verify result FAILED", { subscriberId });
     return false;
   } catch (err) {
     logOndcBpp("verify ERROR", err);

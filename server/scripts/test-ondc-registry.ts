@@ -42,13 +42,23 @@ async function main() {
   );
 
   if (selfKey) {
-    console.log("OK: Registry returned your public key (you are registered on preprod)");
+    console.log("OK: Registry returned your public key:", selfKey.slice(0, 20) + "...");
   } else {
     console.error(
-      "FAIL: Registry lookup failed — complete ONDC portal integration + staging registry before Pramaan"
+      "FAIL: Registry/vlookup failed for your subscriber — ensure portal shows Subscribed and /ondc/subscribe completed"
     );
     process.exit(1);
   }
+
+  const gatewayKey = await fetchPublicKey(
+    "preprod.gateway.proteantech.in",
+    "e4f95b8d-fb8a-4e38-b7f5-de3e21a0a28f"
+  );
+  console.log(
+    gatewayKey
+      ? "OK: Fetched preprod gateway public key"
+      : "WARN: Could not fetch gateway key (Pramaan search may still fail)"
+  );
 
   console.log("\nDone.\n");
 }

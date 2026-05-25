@@ -1,15 +1,29 @@
 import axios from "axios";
+import crypto from "crypto";
 import { env } from "../config/env";
-import { createRegistryAuthorizationHeader } from "./ondc-crypto";
+import {
+  createRegistryAuthorizationHeader,
+  signRawString,
+} from "./ondc-crypto";
 import { logOndcBpp } from "./ondc-debug";
 
 const REGISTRY_V2_URL = "https://preprod.registry.ondc.org/v2.0/lookup";
-const REGISTRY_LEGACY_URL = "https://preprod.registry.ondc.org/ondc/lookup";
+const REGISTRY_VLOOKUP_URL = "https://preprod.registry.ondc.org/ondc/vlookup";
 
 const keyCache = new Map<string, string>();
 
 function cacheKey(subscriberId: string, uniqueKeyId?: string) {
   return `${subscriberId}|${uniqueKeyId ?? ""}`;
+}
+
+function extractPublicKey(data: unknown): string | null {
+  if (!Array.isArray(data) || data.length === 0) return null;
+  const row = data[0] as Record<string, unknown>;
+  const key =
+    (row.signing_public_key as string) ||
+    (row.signing_public_key_b64 as string) ||
+    null;
+  return key || null;
 }
 
 async function registryV2Lookup(
@@ -28,47 +42,74 @@ async function registryV2Lookup(
     transformRequest: [(data) => data],
   });
 
-  const data = response.data;
   logOndcBpp("registry v2 lookup OK", {
     payload,
     status: response.status,
-    count: Array.isArray(data) ? data.length : 0,
+    count: Array.isArray(response.data) ? response.data.length : 0,
   });
 
-  if (Array.isArray(data) && data.length > 0) {
-    const publicKey = data[0]?.signing_public_key as string | undefined;
-    if (publicKey) {
-      logOndcBpp("registry v2 public key", publicKey);
-      return publicKey;
-    }
-  }
-  return null;
+  return extractPublicKey(response.data);
 }
 
-/** Deprecated lookup — no auth; fallback when v2 fails */
-async function registryLegacyLookup(
-  payload: Record<string, string>
+/** Preprod vlookup — works when v2 lookup returns 1010 */
+async function registryVlookup(
+  targetSubscriberId: string,
+  type: "gateway" | "buyerApp" | "sellerApp"
 ): Promise<string | null> {
-  const response = await axios.post(REGISTRY_LEGACY_URL, payload, {
+  const ourId = env.ondc.subscriberId || env.ondc.bppId;
+  if (!ourId) return null;
+
+  const search_parameters = {
+    country: env.ondc.country,
+    domain: env.ondc.domain,
+    type,
+    city: env.ondc.city,
+    subscriber_id: targetSubscriberId,
+  };
+
+  const stringToSign = [
+    search_parameters.country,
+    search_parameters.domain,
+    search_parameters.type,
+    search_parameters.city,
+    search_parameters.subscriber_id,
+  ].join("|");
+
+  const signature = await signRawString(stringToSign);
+  const payload = {
+    sender_subscriber_id: ourId,
+    request_id: crypto.randomUUID(),
+    timestamp: new Date().toISOString(),
+    signature,
+    search_parameters,
+  };
+
+  logOndcBpp("registry vlookup request", {
+    url: REGISTRY_VLOOKUP_URL,
+    targetSubscriberId,
+    type,
+  });
+
+  const response = await axios.post(REGISTRY_VLOOKUP_URL, payload, {
     headers: { "content-type": "application/json", accept: "application/json" },
     timeout: 15000,
   });
 
-  const data = response.data;
-  logOndcBpp("registry legacy lookup OK", {
-    payload,
+  logOndcBpp("registry vlookup OK", {
     status: response.status,
-    count: Array.isArray(data) ? data.length : 0,
+    count: Array.isArray(response.data) ? response.data.length : 0,
   });
 
-  if (Array.isArray(data) && data.length > 0) {
-    const publicKey = data[0]?.signing_public_key as string | undefined;
-    if (publicKey) {
-      logOndcBpp("registry legacy public key", publicKey);
-      return publicKey;
-    }
+  return extractPublicKey(response.data);
+}
+
+function guessVlookupType(subscriberId: string): "gateway" | "buyerApp" | "sellerApp" {
+  const id = subscriberId.toLowerCase();
+  if (id.includes("gateway") || id.includes("gcr.ondc.org")) return "gateway";
+  if (id.includes("buyer") || id.includes("bap") || id.includes("pramaan")) {
+    return "buyerApp";
   }
-  return null;
+  return "sellerApp";
 }
 
 export async function fetchPublicKey(
@@ -117,35 +158,32 @@ export async function fetchPublicKey(
     }
   }
 
-  const legacyPayload: Record<string, string> = {
-    country: env.ondc.country,
-    domain: env.ondc.domain,
-    subscriber_id: subscriberId,
-  };
-  if (uniqueKeyId) {
-    legacyPayload.unique_key_id = uniqueKeyId;
-  }
+  const vlookupTypes: ("gateway" | "buyerApp" | "sellerApp")[] = [
+    guessVlookupType(subscriberId),
+    "gateway",
+    "buyerApp",
+  ];
 
-  logOndcBpp("registry legacy lookup request", {
-    url: REGISTRY_LEGACY_URL,
-    payload: legacyPayload,
-  });
-  try {
-    const publicKey = await registryLegacyLookup(legacyPayload);
-    if (publicKey) {
-      keyCache.set(ck, publicKey);
-      return publicKey;
+  for (const type of [...new Set(vlookupTypes)]) {
+    try {
+      const publicKey = await registryVlookup(subscriberId, type);
+      if (publicKey) {
+        keyCache.set(ck, publicKey);
+        return publicKey;
+      }
+    } catch (err: unknown) {
+      const ax = err as {
+        response?: { status?: number; data?: unknown };
+        message?: string;
+      };
+      logOndcBpp("registry vlookup FAILED", {
+        subscriberId,
+        type,
+        status: ax.response?.status,
+        data: ax.response?.data,
+        message: ax.message,
+      });
     }
-  } catch (err: unknown) {
-    const ax = err as {
-      response?: { status?: number; data?: unknown };
-      message?: string;
-    };
-    logOndcBpp("registry legacy lookup FAILED", {
-      status: ax.response?.status,
-      data: ax.response?.data,
-      message: ax.message,
-    });
   }
 
   logOndcBpp("registry: no signing_public_key found", {
