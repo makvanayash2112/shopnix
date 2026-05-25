@@ -38,54 +38,103 @@ function createDigest(body: string) {
 //   console.log("SIGNING STRING:");
 //   console.log(signingString);
 
-//   console.log(
-//     "SUBSCRIBER ID:",
-//     env.ondc.subscriberId
-//   );
+//   // const privateKey =
+//   //   sodium.from_base64(
+//   //     env.ondc.signingPrivateKey,
+//   //     sodium.base64_variants.ORIGINAL
+//   //   );
 
-//   console.log(
-//     "UKID:",
-//     env.ondc.uniqueKeyId
-//   );
+//   //   console.log(
+//   //   "SUBSCRIBER ID:",
+//   //   env.ondc.subscriberId
+//   // );
 
-//   const seedOrKey =
+//   // console.log(
+//   //   "UKID:",
+//   //   env.ondc.uniqueKeyId
+//   // );
+
+//   // console.log(
+//   //   "PRIVATE KEY:",
+//   //   env.ondc.signingPrivateKey
+//   // );
+
+//   // console.log("sodium private key:", privateKey);
+
+//   // console.log(
+//   //   "PRIVATE KEY LENGTH:",
+//   //   privateKey.length
+//   // );
+
+//   // if (privateKey.length !== 64) {
+//   //   throw new Error(
+//   //     `ONDC private key must be 64 bytes. Current: ${privateKey.length}`
+//   //   );
+//   // }
+
+//   // const signatureBytes =
+//   //   sodium.crypto_sign_detached(
+//   //     sodium.from_string(signingString),
+//   //     privateKey
+//   //   );
+
+
+//   const key =
 //     sodium.from_base64(
 //       env.ondc.signingPrivateKey,
 //       sodium.base64_variants.ORIGINAL
 //     );
 
-//   console.log(
-//     "KEY LENGTH:",
-//     seedOrKey.length
-//   );
+//   console.log("KEY LENGTH:", key.length);
 
 //   let privateKey: Uint8Array;
 
-//   // 32 byte seed
-//   if (seedOrKey.length === 32) {
+//   if (key.length === 64) {
+
+//     // USE FIRST 32 BYTES AS SEED
+//     const seed = key.slice(0, 32);
 
 //     const keyPair =
-//       sodium.crypto_sign_seed_keypair(
-//         seedOrKey
-//       );
+//       sodium.crypto_sign_seed_keypair(seed);
 
-//     privateKey =
-//       keyPair.privateKey;
-//   }
+//     privateKey = keyPair.privateKey;
 
-//   // 64 byte private key
-//   else if (seedOrKey.length === 64) {
+//   } else if (key.length === 32) {
 
-//     privateKey =
-//       seedOrKey;
-//   }
+//     const keyPair =
+//       sodium.crypto_sign_seed_keypair(key);
 
-//   else {
+//     privateKey = keyPair.privateKey;
+
+//   } else {
 
 //     throw new Error(
-//       `Invalid key length: ${seedOrKey.length}`
+//       `Invalid private key length: ${key.length}`
 //     );
 //   }
+
+//   console.log("PRIVATE KEY:", env.ondc.signingPrivateKey);
+//   console.log("PRIVATE KEY LENGTH:", privateKey.length);
+//   console.log("PRIVATE KEY (base64):", sodium.to_base64(privateKey, sodium.base64_variants.ORIGINAL));
+//   console.log("PRIVATE KEY (hex):", sodium.to_hex(privateKey));
+//   console.log("PRIVATE KEY (raw):", privateKey);
+//   console.log("PRIVATE KEY (raw length):", privateKey.length);
+//   console.log("PRIVATE KEY (first 32 bytes as seed, base64):", sodium.to_base64(privateKey.slice(0, 32), sodium.base64_variants.ORIGINAL));
+//   console.log("PRIVATE KEY (first 32 bytes as seed, hex):", sodium.to_hex(privateKey.slice(0, 32)));
+//   console.log("PRIVATE KEY (first 32 bytes as seed, raw):", privateKey.slice(0, 32));
+//   console.log("PRIVATE KEY (first 32 bytes as seed, raw length):", privateKey.slice(0, 32).length);
+//   console.log("PRIVATE KEY (last 32 bytes, base64):", sodium.to_base64(privateKey.slice(32), sodium.base64_variants.ORIGINAL));
+//   console.log("PRIVATE KEY (last 32 bytes, hex):", sodium.to_hex(privateKey.slice(32)));
+//   console.log("PRIVATE KEY (last 32 bytes, raw):", privateKey.slice(32));
+//   console.log("PRIVATE KEY (last 32 bytes, raw length):", privateKey.slice(32).length);
+//   console.log("uniqueKeyId:", env.ondc.uniqueKeyId);
+//   console.log("subscriberId:", env.ondc.subscriberId);
+//   console.log("signingString:", signingString);
+//   console.log("sodium:", sodium);
+//   console.log("sodium ready:", sodium.ready);
+//   console.log("sodium crypto_sign_BYTES:", sodium.crypto_sign_BYTES);
+//   console.log("sodium crypto_sign_PUBLICKEYBYTES:", sodium.crypto_sign_PUBLICKEYBYTES);
+//   console.log("sodium crypto_sign_SECRETKEYBYTES:", sodium.crypto_sign_SECRETKEYBYTES);
 
 //   const signatureBytes =
 //     sodium.crypto_sign_detached(
@@ -93,11 +142,26 @@ function createDigest(body: string) {
 //       privateKey
 //     );
 
+//   console.log(
+//     "SIGNATURE BYTES LENGTH:",
+//     signatureBytes.length
+//   );
+
 //   const signature =
 //     sodium.to_base64(
 //       signatureBytes,
 //       sodium.base64_variants.ORIGINAL
 //     );
+
+//   console.log(
+//     "SIGNATURE LENGTH:",
+//     signature.length
+//   );
+
+//   console.log(
+//     "SIGNATURE:",
+//     signature
+//   );
 
 //   const keyId =
 //     `${env.ondc.subscriberId}` +
@@ -118,7 +182,6 @@ function createDigest(body: string) {
 
 //   return authHeader;
 // }
-
 
 export async function createAuthorizationHeader(
   body: string
@@ -143,130 +206,38 @@ export async function createAuthorizationHeader(
   console.log("SIGNING STRING:");
   console.log(signingString);
 
-  // const privateKey =
-  //   sodium.from_base64(
-  //     env.ondc.signingPrivateKey,
-  //     sodium.base64_variants.ORIGINAL
-  //   );
-
-  //   console.log(
-  //   "SUBSCRIBER ID:",
-  //   env.ondc.subscriberId
-  // );
-
-  // console.log(
-  //   "UKID:",
-  //   env.ondc.uniqueKeyId
-  // );
-
-  // console.log(
-  //   "PRIVATE KEY:",
-  //   env.ondc.signingPrivateKey
-  // );
-
-  // console.log("sodium private key:", privateKey);
-
-  // console.log(
-  //   "PRIVATE KEY LENGTH:",
-  //   privateKey.length
-  // );
-
-  // if (privateKey.length !== 64) {
-  //   throw new Error(
-  //     `ONDC private key must be 64 bytes. Current: ${privateKey.length}`
-  //   );
-  // }
-
-  // const signatureBytes =
-  //   sodium.crypto_sign_detached(
-  //     sodium.from_string(signingString),
-  //     privateKey
-  //   );
-
-
-  const key =
+  const signingKey =
     sodium.from_base64(
       env.ondc.signingPrivateKey,
       sodium.base64_variants.ORIGINAL
     );
 
-  console.log("KEY LENGTH:", key.length);
+  console.log(
+    "SIGNING KEY LENGTH:",
+    signingKey.length
+  );
 
-  let privateKey: Uint8Array;
-
-  if (key.length === 64) {
-
-    // USE FIRST 32 BYTES AS SEED
-    const seed = key.slice(0, 32);
-
-    const keyPair =
-      sodium.crypto_sign_seed_keypair(seed);
-
-    privateKey = keyPair.privateKey;
-
-  } else if (key.length === 32) {
-
-    const keyPair =
-      sodium.crypto_sign_seed_keypair(key);
-
-    privateKey = keyPair.privateKey;
-
-  } else {
+  if (signingKey.length !== 64) {
 
     throw new Error(
-      `Invalid private key length: ${key.length}`
+      `Invalid ONDC signing key length: ${signingKey.length}`
     );
   }
 
-  console.log("PRIVATE KEY:", env.ondc.signingPrivateKey);
-  console.log("PRIVATE KEY LENGTH:", privateKey.length);
-  console.log("PRIVATE KEY (base64):", sodium.to_base64(privateKey, sodium.base64_variants.ORIGINAL));
-  console.log("PRIVATE KEY (hex):", sodium.to_hex(privateKey));
-  console.log("PRIVATE KEY (raw):", privateKey);
-  console.log("PRIVATE KEY (raw length):", privateKey.length);
-  console.log("PRIVATE KEY (first 32 bytes as seed, base64):", sodium.to_base64(privateKey.slice(0, 32), sodium.base64_variants.ORIGINAL));
-  console.log("PRIVATE KEY (first 32 bytes as seed, hex):", sodium.to_hex(privateKey.slice(0, 32)));
-  console.log("PRIVATE KEY (first 32 bytes as seed, raw):", privateKey.slice(0, 32));
-  console.log("PRIVATE KEY (first 32 bytes as seed, raw length):", privateKey.slice(0, 32).length);
-  console.log("PRIVATE KEY (last 32 bytes, base64):", sodium.to_base64(privateKey.slice(32), sodium.base64_variants.ORIGINAL));
-  console.log("PRIVATE KEY (last 32 bytes, hex):", sodium.to_hex(privateKey.slice(32)));
-  console.log("PRIVATE KEY (last 32 bytes, raw):", privateKey.slice(32));
-  console.log("PRIVATE KEY (last 32 bytes, raw length):", privateKey.slice(32).length);
-  console.log("uniqueKeyId:", env.ondc.uniqueKeyId);
-  console.log("subscriberId:", env.ondc.subscriberId);
-  console.log("signingString:", signingString);
-  console.log("sodium:", sodium);
-  console.log("sodium ready:", sodium.ready);
-  console.log("sodium crypto_sign_BYTES:", sodium.crypto_sign_BYTES);
-  console.log("sodium crypto_sign_PUBLICKEYBYTES:", sodium.crypto_sign_PUBLICKEYBYTES);
-  console.log("sodium crypto_sign_SECRETKEYBYTES:", sodium.crypto_sign_SECRETKEYBYTES);
+  // IMPORTANT
+  // DIRECTLY USE 64-BYTE SECRET KEY
 
   const signatureBytes =
     sodium.crypto_sign_detached(
       sodium.from_string(signingString),
-      privateKey
+      signingKey
     );
-
-  console.log(
-    "SIGNATURE BYTES LENGTH:",
-    signatureBytes.length
-  );
 
   const signature =
     sodium.to_base64(
       signatureBytes,
       sodium.base64_variants.ORIGINAL
     );
-
-  console.log(
-    "SIGNATURE LENGTH:",
-    signature.length
-  );
-
-  console.log(
-    "SIGNATURE:",
-    signature
-  );
 
   const keyId =
     `${env.ondc.subscriberId}` +
