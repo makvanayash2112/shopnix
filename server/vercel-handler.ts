@@ -2,6 +2,7 @@ import type { IncomingMessage, ServerResponse } from "http";
 import serverless from "serverless-http";
 import { createApp } from "./app";
 import { connectDatabase } from "./config/database";
+import { logOndcEnvConfig } from "./utils/ondc-debug";
 
 type ServerlessHandler = (
   req: IncomingMessage,
@@ -15,6 +16,7 @@ declare global {
 
 export async function getServerlessHandler(): Promise<ServerlessHandler> {
   await connectDatabase();
+  await logOndcEnvConfig("vercel-cold-start");
 
   if (!global.__shopnixServerless) {
     const app = createApp();

@@ -3,20 +3,19 @@ import { OndcLog } from "../../models/OndcLog";
 import type { BecknContext } from "../../utils/beckn";
 import { callbackUrl } from "../../utils/beckn";
 import { createAuthorizationHeader } from "../../utils/ondc-crypto";
+import { logOndcBpp } from "../../utils/ondc-debug";
 
 export async function postToBap(
   context: BecknContext,
   action: string,
   message: Record<string, unknown>
 ) {
+  const url = callbackUrl(context.bap_uri, action);
+
+  const payload = { context, message };
+  const body = JSON.stringify(payload);
+
   try {
-    const url = callbackUrl(context.bap_uri, action);
-
-    const payload = {
-      context,
-      message,
-    };
-
     await OndcLog.create({
       action,
       transactionId: context.transaction_id,
@@ -24,33 +23,37 @@ export async function postToBap(
       payload,
     }).catch(() => undefined);
 
-    const body =
-      JSON.stringify(payload);
-
-    const authHeader =
-      await createAuthorizationHeader(body);
-
-    console.log(`[ONDC] Sending ${action} → ${url}`);
-
-    const response = await axios.post(
+    logOndcBpp(`outgoing ${action}`, {
       url,
-      body,
-      {
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": authHeader,
-        },
-        timeout: 60000,
-      }
-    );
+      bap_id: context.bap_id,
+      bap_uri: context.bap_uri,
+      transaction_id: context.transaction_id,
+      bodyLength: body.length,
+    });
 
-    console.log(`[ONDC] ${action} success`, response.status);
+    const authHeader = await createAuthorizationHeader(body);
 
+    const response = await axios.post(url, body, {
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: authHeader,
+      },
+      timeout: 60000,
+      transformRequest: [(data) => data],
+    });
+
+    logOndcBpp(`${action} success`, { status: response.status });
     return response.data;
-  } catch (err: any) {
-    console.error(
-      `[ONDC] ${action} failed`,
-      err?.response?.data || err.message
-    );
+  } catch (err: unknown) {
+    const ax = err as {
+      response?: { status?: number; data?: unknown };
+      message?: string;
+    };
+    logOndcBpp(`${action} FAILED`, {
+      url,
+      status: ax.response?.status,
+      data: ax.response?.data,
+      message: ax.message,
+    });
   }
 }

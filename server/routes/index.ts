@@ -28,6 +28,8 @@ router.use("/orders", orderRoutes);
 router.use("/seller", sellerRoutes);
 router.use("/ondc", ondcRoutes);
 router.use("/ondc", ondcGuideRoutes);
-router.use("/ondc-bap", ondcBapRoutes);
+if (process.env.ONDC_ENABLE_BAP === "true") {
+  router.use("/ondc-bap", ondcBapRoutes);
+}
 
 export default router;

@@ -4,8 +4,9 @@ import {
   replyContext,
   type BecknContext,
 } from "../utils/beckn";
-import { logOndcIncoming } from "../middleware/ondc";
+import { logOndcBppIncoming } from "../middleware/ondc-bpp";
 import { postToBap } from "../services/ondc/callback.service";
+import { logOndcBpp, deriveSigningPublicKey } from "../utils/ondc-debug";
 import {
   buildCatalogMessage,
   getPublishedCatalog,
@@ -22,9 +23,6 @@ import { OndcLog } from "../models/OndcLog";
 
 const router = Router();
 
-router.use(logOndcIncoming);
-
-
 type BecknBody = {
   context: BecknContext;
   message?: Record<string, unknown>;
@@ -34,15 +32,40 @@ function ack(res: import("express").Response) {
   return res.status(200).json(buildAckResponse());
 }
 
-/** Browser / portal health check — no Beckn body (must be before logOndcIncoming) */
+/** Browser / portal health check — no Beckn body */
 router.get("/", (_req, res) => {
   res.json({
     name: "Shopnix ONDC BPP",
     version: "1.0.0",
     bpp_id: env.ondc.bppId,
     bpp_uri: env.ondc.bppUri,
+    subscriber_id: env.ondc.subscriberId || env.ondc.bppId,
+    unique_key_id: env.ondc.uniqueKeyId || "(not set)",
     status: "active",
     note: "Beckn APIs are POST only — use /ondc/search with JSON body in Postman",
+  });
+});
+
+/** Masked env check for Vercel logs / browser */
+router.get("/debug-env", async (_req, res) => {
+  const derived = env.ondc.signingPrivateKey
+    ? await deriveSigningPublicKey(env.ondc.signingPrivateKey)
+    : null;
+  res.json({
+    vercel: Boolean(process.env.VERCEL),
+    bpp_id: env.ondc.bppId,
+    bpp_uri: env.ondc.bppUri,
+    subscriber_id: env.ondc.subscriberId || env.ondc.bppId,
+    unique_key_id_set: Boolean(env.ondc.uniqueKeyId),
+    unique_key_id: env.ondc.uniqueKeyId || null,
+    signing_private_key_set: Boolean(env.ondc.signingPrivateKey),
+    derived_public_key: derived,
+    env_public_key: process.env.ONDC_SIGNING_PUBLIC_KEY || null,
+    portal_expected_public: "VeKKg8tUxcZ00SB1tvkwYDrZ2VnQ0rQ4c/KyzyBVMMY=",
+    keys_match_portal: derived === "VeKKg8tUxcZ00SB1tvkwYDrZ2VnQ0rQ4c/KyzyBVMMY=",
+    domain: env.ondc.domain,
+    city: env.ondc.city,
+    country: env.ondc.country,
   });
 });
 
@@ -59,6 +82,9 @@ router.get("/test-catalog", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
+
+/** Beckn POST — signature + context validation */
+router.use(logOndcBppIncoming);
 
 /** Beckn POST routes require valid context in JSON body */
 
@@ -80,53 +106,40 @@ router.get("/test-catalog", async (req, res) => {
 router.post("/search", async (req, res) => {
   const body = req.body as BecknBody;
 
-  // IMPORTANT: ACK immediately
   ack(res);
 
   try {
-    console.log("========== SEARCH REQUEST ==========");
-    // console.log(JSON.stringify(body, null, 2));
+    logOndcBpp("search ACK sent — building catalog", {
+      transaction_id: body.context?.transaction_id,
+      bap_id: body.context?.bap_id,
+      bap_uri: body.context?.bap_uri,
+    });
 
     const { seller, products } = await getPublishedCatalog();
 
-    console.log("SELLER:", seller);
-    console.log("TOTAL PRODUCTS:", products.length);
+    logOndcBpp("catalog source", {
+      sellerId: seller?._id?.toString(),
+      storeName: seller?.storeName,
+      productCount: products.length,
+    });
 
     if (!seller) {
-      console.log("NO SELLER FOUND");
+      logOndcBpp("search abort: no seller in DB");
       return;
     }
 
     const context = replyContext(body.context, "on_search");
+    const message = buildCatalogMessage(seller, products, env.apiBaseUrl);
 
-    console.log("REPLY CONTEXT:");
-    console.log(JSON.stringify(context, null, 2));
+    logOndcBpp("posting on_search to buyer", {
+      bap_uri: context.bap_uri,
+      bpp_id: context.bpp_id,
+      products: products.length,
+    });
 
-    const message = buildCatalogMessage(
-      seller,
-      products,
-      env.apiBaseUrl
-    );
-
-    console.log("CATALOG MESSAGE:");
-    // console.log(JSON.stringify(message, null, 2));
-    // console.log(JSON.stringify(body, null, 2));
-    console.log(
-      `[ONDC SEARCH] products=${products.length}`
-    );
-    console.log("CALLING BAP CALLBACK...");
-
-    const response = await postToBap(
-      context,
-      "on_search",
-      message
-    );
-
-    console.log("BAP CALLBACK SUCCESS");
-    console.log(response);
+    await postToBap(context, "on_search", message);
   } catch (err) {
-    console.error("SEARCH ERROR:");
-    console.error(err);
+    logOndcBpp("search ERROR", err);
   }
 });
 

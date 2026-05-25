@@ -13,6 +13,8 @@
     "seed:admin": "tsx server/scripts/seed-admin.ts",
     "seed:products": "tsx server/scripts/seed-products.ts",
     "fix:orders": "tsx server/scripts/fix-order-sellers.ts",
+    "ondc:keys": "tsx server/scripts/generate-ondc-keys.ts",
+    "ondc:test-registry": "tsx server/scripts/test-ondc-registry.ts",
     "lint": "eslint"
   },
   "dependencies": {

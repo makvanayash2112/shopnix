@@ -223,11 +223,11 @@ export async function logOndcIncoming(
 
     // VERIFY SIGNATURE
 
-    const verified =
-      await verifyAuthorizationHeader(
-        authHeader,
-        (req as any).rawBody
-      );
+    const rawBody =
+      (req as { rawBody?: string }).rawBody ||
+      JSON.stringify(req.body ?? {});
+
+    const verified = await verifyAuthorizationHeader(authHeader, rawBody);
 
     if (!verified) {
 

@@ -6,10 +6,12 @@ import ondcRoutes from "./routes/ondc.routes";
 import ondcGuideRoutes from "./routes/ondc-guide.routes";
 import ondcBapRoutes from "./routes/ondc-bap.routes";
 import { getSiteUrl } from "./lib/site-url";
+import { logOndcEnvConfig } from "./utils/ondc-debug";
 
 export function createApp() {
   const app = express();
   const siteUrl = getSiteUrl();
+  void logOndcEnvConfig("express-app-create");
 
   const allowedOrigins = [
     "http://localhost:3000",
@@ -76,9 +78,15 @@ export function createApp() {
   app.use("/api", apiRoutes);
 
   /** ONDC registry paths (same domain root — required for Vercel + ONDC portal) */
+  /** Seller (BPP) only — buyer BAP routes disabled unless ONDC_ENABLE_BAP=true */
   app.use("/ondc", ondcRoutes);
   app.use("/ondc", ondcGuideRoutes);
-  app.use("/ondc-bap", ondcBapRoutes);
+  if (process.env.ONDC_ENABLE_BAP === "true") {
+    app.use("/ondc-bap", ondcBapRoutes);
+    console.log("[ONDC] BAP routes enabled (ONDC_ENABLE_BAP=true)");
+  } else {
+    console.log("[ONDC] Seller-only mode: /ondc-bap not mounted");
+  }
 
   app.use(
     (
