@@ -166,10 +166,10 @@ export async function createAuthorizationHeader(
       privateKey
     );
 
-    console.log(
-      "SIGNATURE BYTES LENGTH:",
-      signatureBytes.length
-    );
+  console.log(
+    "SIGNATURE BYTES LENGTH:",
+    signatureBytes.length
+  );
 
   const signature =
     sodium.to_base64(
@@ -177,15 +177,15 @@ export async function createAuthorizationHeader(
       sodium.base64_variants.ORIGINAL
     );
 
-    console.log(
-      "SIGNATURE LENGTH:",
-      signature.length
-    );
+  console.log(
+    "SIGNATURE LENGTH:",
+    signature.length
+  );
 
-    console.log(
-      "SIGNATURE:",
-      signature
-    );
+  console.log(
+    "SIGNATURE:",
+    signature
+  );
 
   const keyId =
     `${env.ondc.subscriberId}` +
@@ -263,15 +263,31 @@ export async function verifyAuthorizationHeader(
     const digest =
       createDigest(rawBody);
 
+    console.log("RAW BODY:");
+    console.log(rawBody);
+
     const signingString =
       `(created): ${created}\n` +
       `(expires): ${expires}\n` +
       `digest: ${digest}`;
 
-    const [
-      subscriberId,
-      uniqueKeyId
-    ] = keyId.split("|");
+
+    console.log("SIGNING STRING:");
+    console.log(signingString);
+
+    // const [
+    //   subscriberId,
+    //   uniqueKeyId
+    // ] = keyId.split("|");
+
+    const parts =
+      keyId.split("|");
+
+    const subscriberId =
+      parts[0];
+
+    const uniqueKeyId =
+      parts[1];
 
     console.log(
       "VERIFY SUBSCRIBER:",

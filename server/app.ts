@@ -33,7 +33,7 @@ export function createApp() {
   app.use(
     express.json({
       verify: (req: any, res, buf) => {
-        req.rawBody = buf.toString();
+        req.rawBody = buf.toString("utf8");
       },
       limit: "2mb",
     })
