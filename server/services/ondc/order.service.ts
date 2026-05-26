@@ -14,7 +14,7 @@ interface BecknOrderItem {
 export async function createOrderFromInit(
   context: BecknContext,
   items: BecknOrderItem[],
-  customer?: Record<string, unknown>,
+  customer?: any,
   providerId?: string
 ): Promise<IOrder> {
   const existing = await findOrderByTransaction(context.transaction_id);
@@ -92,17 +92,49 @@ export async function createOrderFromInit(
     status: "Created",
     items: orderItems,
     customer: customer ?? {},
+    // payment: {
+    //   method: "cash",
+    //   amount,
+    //   status: "NOT-PAID",
+    //   type: "ON-FULFILLMENT",
+    // },
     payment: {
-      method: "cash",
-      amount,
-      status: "NOT-PAID",
-      type: "ON-FULFILLMENT",
+      type:
+        order.payment?.type || "ON-ORDER",
+
+      status:
+        order.payment?.status || "NOT-PAID",
+
+      collected_by: "BPP",
+
+      params: {
+        amount: String(order.payment?.amount ?? 0),
+
+        currency: "INR",
+      },
     },
+
+    cancellation_terms: [],
+
+    tags: [],
     fulfillment: { type: "Delivery", state: "Pending" },
+    // becknContext: {
+    //   ...(context as unknown as Record<string, unknown>),
+    //   providerId:
+    //     seller.ondcProviderId || `SHOPNIX_${seller._id.toString().slice(-8)}`,
+    // },
+    locationId: "L1",
+
+    gps:
+      customer?.address?.gps ||
+      "12.971599,77.594566",
+
     becknContext: {
       ...(context as unknown as Record<string, unknown>),
+
       providerId:
-        seller.ondcProviderId || `SHOPNIX_${seller._id.toString().slice(-8)}`,
+        seller.ondcProviderId ||
+        `SHOPNIX_${seller._id.toString().slice(-8)}`,
     },
   });
 
@@ -151,30 +183,161 @@ export function buildOrderMessage(order: IOrder) {
     order: {
       id: order.orderId,
       state: order.status,
-      ...(providerId ? { provider: { id: providerId } } : {}),
+      ...(providerId ? {
+        provider: {
+          id: providerId,
+          locations: [
+            {
+              id: order.locationId || "L1",
+            },
+          ],
+        }
+      } : {}),
       items: order.items.map((item) => ({
         id: item.ondcItemId,
         quantity: { count: item.quantity },
         fulfillment_id: "F1",
       })),
+      // billing: {
+      //   name: order.customer?.name || "Customer",
+      //   email: order.customer?.email,
+      //   phone: order.customer?.phone,
+      //   address: order.customer?.address,
+      // },
       billing: {
         name: order.customer?.name || "Customer",
-        email: order.customer?.email,
-        phone: order.customer?.phone,
-        address: order.customer?.address,
+
+        email:
+          order.customer?.email || "customer@test.com",
+
+        phone:
+          order.customer?.phone || "9999999999",
+
+        address: {
+          name:
+            order.customer?.address?.name || "Home",
+
+          building:
+            order.customer?.address?.building ||
+            "123",
+
+          locality:
+            order.customer?.address?.locality ||
+            "MG Road",
+
+          city:
+            order.customer?.address?.city ||
+            "Bengaluru",
+
+          state:
+            order.customer?.address?.state ||
+            "Karnataka",
+
+          country:
+            order.customer?.address?.country ||
+            "IND",
+
+          area_code:
+            order.customer?.address?.area_code ||
+            "560001",
+        },
+
+        tax_number: "",
+
+        created_at: order.createdAt.toISOString(),
+
+        updated_at: order.updatedAt.toISOString(),
       },
+      // fulfillments: [
+      //   {
+      //     id: "F1",
+      //     type: order.fulfillment?.type || "Delivery",
+      //     state: {
+      //       descriptor: { code: order.fulfillment?.state || "Pending" },
+      //     },
+      //     tracking: order.fulfillment?.tracking,
+      //     tags: [
+      //       {
+      //         code: "routing",
+      //         list: [{ code: "type", value: "P2P" }],
+      //       },
+      //     ],
+      //   },
+      // ],
       fulfillments: [
         {
           id: "F1",
-          type: order.fulfillment?.type || "Delivery",
+
+          type:
+            order.fulfillment?.type || "Delivery",
+
           state: {
-            descriptor: { code: order.fulfillment?.state || "Pending" },
+            descriptor: {
+              code:
+                order.fulfillment?.state || "Pending",
+            },
           },
-          tracking: order.fulfillment?.tracking,
+
+          tracking: false,
+
+          end: {
+            contact: {
+              phone:
+                order.customer?.phone ||
+                "9999999999",
+
+              email:
+                order.customer?.email ||
+                "customer@test.com",
+            },
+
+            location: {
+              gps:
+                order.gps ||
+                "12.971599,77.594566",
+
+              address: {
+                name:
+                  order.customer?.address?.name ||
+                  "Home",
+
+                building:
+                  order.customer?.address?.building ||
+                  "123",
+
+                locality:
+                  order.customer?.address?.locality ||
+                  "MG Road",
+
+                city:
+                  order.customer?.address?.city ||
+                  "Bengaluru",
+
+                state:
+                  order.customer?.address?.state ||
+                  "Karnataka",
+
+                country:
+                  order.customer?.address?.country ||
+                  "IND",
+
+                area_code:
+                  order.customer?.address?.area_code ||
+                  "560001",
+              },
+            },
+          },
+
           tags: [
             {
               code: "routing",
-              list: [{ code: "type", value: "P2P" }],
+
+              list: [
+                {
+                  code: "type",
+                  value: "P2P",
+                },
+              ],
             },
           ],
         },
@@ -185,19 +348,42 @@ export function buildOrderMessage(order: IOrder) {
         collected_by: "BPP",
         params: { amount: String(order.payment?.amount ?? 0), currency: "INR" },
       },
+      // quote: {
+      //   price: {
+      //     currency: "INR",
+      //     value: String(order.payment?.amount ?? 0),
+      //   },
+      //   breakup: order.items.map((item) => ({
+      //     title: item.name,
+      //     price: {
+      //       currency: "INR",
+      //       value: String(item.price * item.quantity),
+      //     },
+      //     item: { id: item.ondcItemId },
+      //   })),
+      // },
       quote: {
         price: {
           currency: "INR",
+
           value: String(order.payment?.amount ?? 0),
         },
+
         breakup: order.items.map((item) => ({
           title: item.name,
+
           price: {
             currency: "INR",
+
             value: String(item.price * item.quantity),
           },
-          item: { id: item.ondcItemId },
+
+          item: {
+            id: item.ondcItemId,
+          },
         })),
+
+        ttl: "P1D",
       },
     },
   };

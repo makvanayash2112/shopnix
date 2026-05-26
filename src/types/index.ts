@@ -93,7 +93,17 @@ export interface Order {
     name?: string;
     email?: string;
     phone?: string;
-    address?: Record<string, string>;
+    // address?: Record<string, string>;
+    address?: {
+      name?: string;
+      building?: string;
+      locality?: string;
+      city?: string;
+      state?: string;
+      country?: string;
+      area_code?: string;
+      gps?: string;
+    };
   };
   payment: {
     method?: string;

@@ -35,7 +35,17 @@ export interface IOrder extends Document {
     name?: string;
     email?: string;
     phone?: string;
-    address?: Record<string, string>;
+    // address?: Record<string, string>;
+    address?: {
+      name?: string;
+      building?: string;
+      locality?: string;
+      city?: string;
+      state?: string;
+      country?: string;
+      area_code?: string;
+      gps?: string;
+    };
   };
   payment: {
     method: PaymentMethod;
@@ -51,6 +61,8 @@ export interface IOrder extends Document {
   deliveredAt?: Date;
   returnInfo?: IReturnInfo;
   becknContext?: Record<string, unknown>;
+  locationId?: string;
+  gps?: string;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -127,6 +139,8 @@ const orderSchema = new Schema<IOrder>(
       },
       sellerNote: String,
     },
+    locationId: String,
+    gps: String,
     becknContext: Schema.Types.Mixed,
   },
   { timestamps: true }
