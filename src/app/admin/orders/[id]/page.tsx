@@ -126,8 +126,11 @@ export default function OrderDetailPage() {
           )}
         </dl>
         <p className="mt-3 text-sm text-slate-600">
-          {order.customer?.address?.street}, {order.customer?.address?.city},{" "}
-          {order.customer?.address?.pincode}
+          {order.customer?.address?.building},{" "}
+          {order.customer?.address?.locality},{" "}
+          {order.customer?.address?.city},{" "}
+          {order.customer?.address?.state} -{" "}
+          {order.customer?.address?.area_code}
         </p>
       </Card>
 
