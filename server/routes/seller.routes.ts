@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { Seller } from "../models/Seller";
-import { requireAuth, type AuthRequest } from "../middleware/auth";
+import {
+  requireAuth,
+  requireSuperAdmin,
+  type AuthRequest,
+} from "../middleware/auth";
 import { sendError, sendSuccess } from "../utils/response";
 import {
   getSellerOndcReadiness,
@@ -11,6 +15,23 @@ import { getImageStorageStatus } from "../lib/image-storage";
 const router = Router();
 
 router.use(requireAuth);
+
+router.get("/all", requireSuperAdmin, async (_req: AuthRequest, res) => {
+  const sellers = await Seller.find().sort({ createdAt: -1 });
+  return sendSuccess(res, sellers);
+});
+
+router.patch(
+  "/:id/ondc-active",
+  requireSuperAdmin,
+  async (req: AuthRequest, res) => {
+    const seller = await Seller.findById(req.params.id);
+    if (!seller) return sendError(res, "Seller not found", 404);
+    seller.ondc.isActive = Boolean(req.body.isActive);
+    await seller.save();
+    return sendSuccess(res, seller, 200, "Seller ONDC status updated");
+  }
+);
 
 router.get("/profile", async (req: AuthRequest, res) => {
   const seller = await Seller.findById(req.user!.sellerId);

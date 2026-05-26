@@ -10,13 +10,7 @@
     "build": "next build --webpack",
     "start": "next start",
     "server": "tsx server/index.ts",
-    "seed:admin": "tsx server/scripts/seed-admin.ts",
-    "seed:products": "tsx server/scripts/seed-products.ts",
-    "fix:orders": "tsx server/scripts/fix-order-sellers.ts",
-    "fix:product-indexes": "tsx server/scripts/fix-product-indexes.ts",
-    "prepare:live-ondc": "tsx server/scripts/prepare-live-ondc.ts",
-    "ondc:keys": "tsx server/scripts/generate-ondc-keys.ts",
-    "ondc:test-registry": "tsx server/scripts/test-ondc-registry.ts",
+    "seed:superadmin": "tsx server/scripts/seed-superadmin.ts",
     "lint": "eslint"
   },
   "dependencies": {

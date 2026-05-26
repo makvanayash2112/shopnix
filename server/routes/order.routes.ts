@@ -13,6 +13,9 @@ import {
   restockOrderItems,
   validateSellerTransition,
 } from "../services/order-workflow.service";
+import { postToBap } from "../services/ondc/callback.service";
+import { buildOrderMessage } from "../services/ondc/order.service";
+import { replyContext, type BecknContext } from "../utils/beckn";
 import type { OrderStatus } from "../constants/order-workflow";
 
 const router = Router();
@@ -88,6 +91,13 @@ router.patch("/:id/status", async (req: AuthRequest, res) => {
   }
 
   await order.save();
+  if (order.becknContext) {
+    const context = replyContext(
+      order.becknContext as unknown as BecknContext,
+      "on_status"
+    );
+    void postToBap(context, "on_status", buildOrderMessage(order));
+  }
   return sendSuccess(res, order, 200, `Order updated to ${status}`);
 });
 

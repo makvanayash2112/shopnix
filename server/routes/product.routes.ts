@@ -4,8 +4,6 @@ import { requireAuth, type AuthRequest } from "../middleware/auth";
 import { productUpload } from "../middleware/upload";
 import {
   saveProductImage,
-  parseImageUrlsFromBody,
-  validatePublicImageUrls,
   ImageStorageError,
 } from "../lib/image-storage";
 import { resolveOndcItemId } from "../lib/product-id";
@@ -25,34 +23,19 @@ function applyCategory(product: InstanceType<typeof Product>, raw?: string) {
 }
 
 async function collectProductImages(
-  body: Record<string, string>,
   files: Express.Multer.File[]
 ): Promise<string[]> {
-  const fromUrls = validatePublicImageUrls(
-    parseImageUrlsFromBody(body.imageUrls)
-  );
   const fromFiles: string[] = [];
   for (const file of files) {
-    try {
-      fromFiles.push(await saveProductImage(file));
-    } catch (err) {
-      if (
-        err instanceof ImageStorageError &&
-        err.code === "BLOB_REQUIRED" &&
-        fromUrls.length > 0
-      ) {
-        break;
-      }
-      throw err;
-    }
+    fromFiles.push(await saveProductImage(file));
   }
-  if (files.length > 0 && fromFiles.length === 0 && fromUrls.length === 0) {
+  if (files.length > 0 && fromFiles.length === 0) {
     throw new ImageStorageError(
-      "Could not save uploaded files. Add BLOB_READ_WRITE_TOKEN on Vercel or paste HTTPS image URLs.",
+      "Could not save uploaded files. Vercel needs BLOB_READ_WRITE_TOKEN, or deploy to your own server with writable public/uploads/products.",
       "BLOB_REQUIRED"
     );
   }
-  return [...fromUrls, ...fromFiles].slice(0, 8);
+  return fromFiles.slice(0, 8);
 }
 
 const router = Router();
@@ -91,7 +74,7 @@ router.post(
       const body = req.body as Record<string, string>;
       const files = (req.files as Express.Multer.File[]) || [];
 
-      const imageUrls = await collectProductImages(body, files);
+      const images = await collectProductImages(files);
 
       const sku = (body.sku || `SKU-${Date.now().toString(36)}`).trim();
       const slug = normalizeCategory(body.categorySlug || body.category);
@@ -102,10 +85,10 @@ router.post(
       );
 
       const isPublished = body.isPublished !== "false";
-      if (isPublished && imageUrls.length === 0) {
+      if (isPublished && images.length === 0) {
         return sendError(
           res,
-          "Add at least one product image (upload file or paste HTTPS image URL) before publishing on ONDC.",
+          "Add at least one product image before publishing on ONDC.",
           400
         );
       }
@@ -122,7 +105,7 @@ router.post(
         mrp: body.mrp ? Number(body.mrp) : undefined,
         quantity: Number(body.quantity ?? 0),
         unit: body.unit || "unit",
-        images: imageUrls,
+        images,
         isPublished,
         ondcItemId,
         tags: body.tags ? body.tags.split(",").map((t) => t.trim()) : [],
@@ -181,8 +164,8 @@ router.put(
         product.isPublished = body.isPublished === "true";
       }
 
-      if (files.length || body.imageUrls) {
-        const added = await collectProductImages(body, files);
+      if (files.length) {
+        const added = await collectProductImages(files);
         if (body.replaceImages === "true") {
           product.images = added.slice(0, 8);
         } else {
@@ -198,7 +181,7 @@ router.put(
       if (product.isPublished && product.images.length === 0) {
         return sendError(
           res,
-          "Published products need at least one image for ONDC. Upload a file or add an HTTPS image URL.",
+          "Published products need at least one image for ONDC.",
           400
         );
       }

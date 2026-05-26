@@ -66,7 +66,7 @@ function getSigningKeyBytes(privateKey: string): Uint8Array {
     return sodium.crypto_sign_seed_keypair(keyBytes).privateKey;
   }
   throw new Error(
-    `Invalid ONDC_SIGNING_PRIVATE_KEY length (${keyBytes.length}). Use npm run ondc:keys`
+    `Invalid ONDC_SIGNING_PRIVATE_KEY length (${keyBytes.length}). Generate a valid Ed25519 key pair from the ONDC portal or trusted key utility.`
   );
 }
 

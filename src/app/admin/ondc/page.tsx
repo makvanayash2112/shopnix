@@ -19,8 +19,6 @@ interface NetworkGuide {
   config: {
     bppId: string;
     bppUri: string;
-    bapId: string;
-    bapUri: string;
     domain: string;
     city: string;
     hasSigningKey: boolean;
@@ -32,9 +30,7 @@ interface NetworkGuide {
   registrationSteps: { step: number; title: string; detail: string }[];
   publicEndpoints: {
     bppHealth: string;
-    bapHealth: string;
     bppEndpoints: { method: string; path: string; fullUrl: string; desc: string }[];
-    bapEndpoints: { method: string; path: string; fullUrl: string; desc: string }[];
   };
 }
 
@@ -43,7 +39,7 @@ export default function OndcPage() {
   const [guide, setGuide] = useState<NetworkGuide | null>(null);
   const [logs, setLogs] = useState<OndcLog[]>([]);
   const [message, setMessage] = useState("");
-  const [tab, setTab] = useState<"bpp" | "bap" | "steps">("steps");
+  const [tab, setTab] = useState<"steps" | "bpp">("steps");
 
   useEffect(() => {
     apiFetch<Seller>("/seller/profile").then(setSeller).catch(console.error);
@@ -76,29 +72,35 @@ export default function OndcPage() {
         }),
       });
       setSeller(updated);
-      setMessage("Seller BPP configuration saved.");
+      setMessage("Seller node configuration saved.");
     } catch (err) {
       setMessage(err instanceof Error ? err.message : "Save failed");
     }
   }
 
-  if (!seller) return <p className="text-slate-500">Loading…</p>;
+  if (!seller) return <p className="text-slate-500">Loading...</p>;
 
   return (
     <div className="space-y-8">
       <div>
-        <h1 className="text-2xl font-bold">ONDC — Seller + Buyer</h1>
+        <h1 className="text-2xl font-bold">ONDC Seller Node</h1>
         <p className="text-slate-500">
-          Register <strong>BPP</strong> (seller) and <strong>BAP</strong> (buyer) on{" "}
-          <a href="https://portal.ondc.org" className="text-emerald-600 hover:underline" target="_blank" rel="noreferrer">
+          Register this application as a seller BPP/MSN on{" "}
+          <a
+            href="https://portal.ondc.org"
+            className="text-emerald-600 hover:underline"
+            target="_blank"
+            rel="noreferrer"
+          >
             portal.ondc.org
           </a>
-          . Full guide: <code className="text-xs">docs/ONDC_REGISTRATION.md</code> in project.
+          . Sellers onboard here, publish products, and appear as providers in
+          ONDC search.
         </p>
       </div>
 
       <div className="flex gap-2 border-b">
-        {(["steps", "bpp", "bap"] as const).map((t) => (
+        {(["steps", "bpp"] as const).map((t) => (
           <button
             key={t}
             type="button"
@@ -109,13 +111,13 @@ export default function OndcPage() {
                 : "text-slate-500"
             }`}
           >
-            {t === "steps" ? "How to register" : t === "bpp" ? "Seller (BPP)" : "Buyer (BAP)"}
+            {t === "steps" ? "How to register" : "Seller BPP"}
           </button>
         ))}
       </div>
 
       {tab === "steps" && guide && (
-        <Card title="ONDC marketplace onboarding checklist">
+        <Card title="MSN onboarding checklist">
           <ol className="space-y-4">
             {guide.registrationSteps.map((s) => (
               <li key={s.step} className="flex gap-3 text-sm">
@@ -130,41 +132,74 @@ export default function OndcPage() {
             ))}
           </ol>
           <div className="mt-6 flex flex-wrap gap-4 text-sm">
-            <a href={guide.portalUrl} target="_blank" rel="noreferrer" className="font-medium text-emerald-600">
-              ONDC Portal →
+            <a
+              href={guide.portalUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-emerald-600"
+            >
+              ONDC Portal
             </a>
-            <a href={guide.pramaanUrl} target="_blank" rel="noreferrer" className="font-medium text-emerald-600">
-              Pramaan sandbox →
+            <a
+              href={guide.pramaanUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="font-medium text-emerald-600"
+            >
+              Pramaan sandbox
             </a>
-            <a href={guide.docsUrl} target="_blank" rel="noreferrer" className="text-slate-500">
-              Developer docs →
+            <a
+              href={guide.docsUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="text-slate-500"
+            >
+              Developer docs
             </a>
           </div>
           <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-            <strong>Vercel:</strong> use <code>https://your-app.vercel.app/ondc</code> and{" "}
-            <code>/ondc-bap</code> in ONDC portal. See <code>docs/VERCEL_DEPLOY.md</code>.
+            Register only <code>/ondc</code> in the ONDC portal for this
+            seller-node project.
           </p>
         </Card>
       )}
 
       {tab === "bpp" && (
         <div className="grid gap-6 lg:grid-cols-2">
-          <Card title="BPP configuration (Seller)">
+          <Card title="BPP configuration">
             <form onSubmit={saveOndc} className="space-y-4">
-              <Input label="BPP ID (subscriber_id)" name="bppId" defaultValue={seller.ondc.bppId} required />
-              <Input label="BPP URI" name="bppUri" defaultValue={seller.ondc.bppUri} required />
+              <Input
+                label="BPP ID (subscriber_id)"
+                name="bppId"
+                defaultValue={seller.ondc.bppId}
+                required
+              />
+              <Input
+                label="BPP URI"
+                name="bppUri"
+                defaultValue={seller.ondc.bppUri}
+                required
+              />
               <Input label="Domain" name="domain" defaultValue={seller.ondc.domain} />
               <Input label="City code" name="city" defaultValue={seller.ondc.city} />
-              <Input label="Subscriber ID" name="subscriberId" defaultValue={seller.ondc.subscriberId} />
+              <Input
+                label="Subscriber ID"
+                name="subscriberId"
+                defaultValue={seller.ondc.subscriberId}
+              />
               <label className="flex items-center gap-2 text-sm">
-                <input type="checkbox" name="isActive" defaultChecked={seller.ondc.isActive} />
-                BPP active
+                <input
+                  type="checkbox"
+                  name="isActive"
+                  defaultChecked={seller.ondc.isActive}
+                />
+                Seller active on ONDC catalog
               </label>
               {message && <p className="text-sm text-emerald-600">{message}</p>}
               <Button type="submit">Save BPP config</Button>
             </form>
           </Card>
-          <Card title="BPP endpoints (register on portal)">
+          <Card title="BPP endpoints">
             <ul className="max-h-96 space-y-2 overflow-y-auto font-mono text-xs">
               {guide?.publicEndpoints.bppEndpoints.map((e) => (
                 <li key={e.path} className="rounded bg-slate-50 p-2">
@@ -174,42 +209,6 @@ export default function OndcPage() {
             </ul>
             <p className="mt-3 text-xs text-slate-500">
               Health: {guide?.publicEndpoints.bppHealth}
-            </p>
-          </Card>
-        </div>
-      )}
-
-      {tab === "bap" && guide && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <Card title="BAP identity (Buyer app)">
-            <dl className="space-y-3 text-sm">
-              <div>
-                <dt className="text-slate-500">BAP ID</dt>
-                <dd className="font-mono text-xs">{guide.config.bapId}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">BAP URI</dt>
-                <dd className="font-mono text-xs break-all">{guide.config.bapUri}</dd>
-              </div>
-              <div>
-                <dt className="text-slate-500">Signing key in .env</dt>
-                <dd>{guide.config.hasSigningKey ? "✅ Set" : "❌ Add ONDC_SIGNING_PRIVATE_KEY"}</dd>
-              </div>
-            </dl>
-            <p className="mt-4 text-sm text-slate-600">
-              Buyer UI: <a href="/shop/ondc" className="text-indigo-600">/shop/ondc</a>
-            </p>
-          </Card>
-          <Card title="BAP callback URLs">
-            <ul className="max-h-96 space-y-2 overflow-y-auto font-mono text-xs">
-              {guide.publicEndpoints.bapEndpoints.map((e) => (
-                <li key={e.path} className="rounded bg-slate-50 p-2">
-                  {e.method} {e.fullUrl}
-                </li>
-              ))}
-            </ul>
-            <p className="mt-3 text-xs text-slate-500">
-              Health: {guide.publicEndpoints.bapHealth}
             </p>
           </Card>
         </div>
@@ -233,8 +232,12 @@ export default function OndcPage() {
                 <tr key={log._id} className="border-b border-slate-100">
                   <td className="py-2">{log.action}</td>
                   <td className="py-2">{log.direction}</td>
-                  <td className="py-2 font-mono text-xs">{log.transactionId.slice(0, 14)}…</td>
-                  <td className="py-2">{new Date(log.createdAt).toLocaleString()}</td>
+                  <td className="py-2 font-mono text-xs">
+                    {log.transactionId.slice(0, 14)}...
+                  </td>
+                  <td className="py-2">
+                    {new Date(log.createdAt).toLocaleString()}
+                  </td>
                 </tr>
               ))}
             </tbody>

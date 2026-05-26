@@ -86,7 +86,7 @@ export default function OrderDetailPage() {
         <div>
           <h1 className="text-2xl font-bold">{order.orderId}</h1>
           <p className="text-sm text-slate-500">
-            Buyer order · {order.customer?.email ?? "—"}
+            ONDC order · {order.customer?.email ?? "-"}
           </p>
         </div>
         <Badge status={order.status} />
@@ -177,7 +177,7 @@ export default function OrderDetailPage() {
 
       {norm === "Delivered" && !order.returnInfo?.requestedAt && (
         <p className="text-sm text-slate-500">
-          Buyer may request return within 7 days of delivery.
+          Return window is 7 days from delivery.
         </p>
       )}
     </div>

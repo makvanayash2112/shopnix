@@ -28,8 +28,8 @@ export function getImageStorageStatus() {
     hint: useBlob
       ? "File uploads are stored on Vercel Blob."
       : onVercel
-        ? "Add BLOB_READ_WRITE_TOKEN in Vercel, or paste HTTPS image URLs when adding products."
-        : "Files are saved under public/uploads/products on this server.",
+        ? "Vercel serverless storage is not persistent. Use Vercel Blob or deploy to your own server for public/uploads/products."
+        : "Files are saved under public/uploads/products and product documents store the image filename.",
   };
 }
 
@@ -99,16 +99,17 @@ export async function saveProductImage(
   const filename = `${unique}${ext}`;
 
   if (useBlob && file.buffer) {
-    const blob = await put(`products/${filename}`, file.buffer, {
+    await put(`products/${filename}`, file.buffer, {
       access: "public",
       contentType: file.mimetype,
+      allowOverwrite: true,
     });
-    return blob.url;
+    return filename;
   }
 
   if (process.env.VERCEL) {
     throw new ImageStorageError(
-      "Image upload requires BLOB_READ_WRITE_TOKEN on Vercel. Add it under Storage → Blob, or paste HTTPS image URLs in the product form.",
+      "Image upload requires BLOB_READ_WRITE_TOKEN on Vercel, or deploy this app to a server with writable public/uploads/products.",
       "BLOB_REQUIRED"
     );
   }
@@ -118,6 +119,10 @@ export async function saveProductImage(
     fs.mkdirSync(uploadDir, { recursive: true });
   }
 
+  if (file.filename) {
+    return file.filename;
+  }
+
   const dest = path.join(uploadDir, filename);
   if (file.buffer) {
     fs.writeFileSync(dest, file.buffer);
@@ -125,5 +130,5 @@ export async function saveProductImage(
     fs.copyFileSync(file.path, dest);
   }
 
-  return `${getSiteUrl()}/uploads/products/${filename}`;
+  return filename;
 }

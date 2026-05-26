@@ -1,8 +1,6 @@
+import type { IOrder } from "../models/Order";
 import { Product } from "../models/Product";
-import { Order, type IOrder } from "../models/Order";
 import {
-  canBuyerCancel,
-  canRequestReturn,
   fulfillmentLabel,
   normalizeLegacyStatus,
   SELLER_STATUS_FLOW,
@@ -74,36 +72,5 @@ export function validateSellerTransition(
   if (!allowed.includes(next)) {
     return `Cannot change from ${cur} to ${next}`;
   }
-  return null;
-}
-
-export async function cancelOrderByBuyer(order: IOrder): Promise<string | null> {
-  if (!canBuyerCancel(order.status)) {
-    return "Order cannot be cancelled while out for delivery or after delivery";
-  }
-  applyStatusUpdate(order, "Cancelled");
-  await restockOrderItems(order);
-  await order.save();
-  return null;
-}
-
-export async function requestReturnByBuyer(
-  order: IOrder,
-  reason: string
-): Promise<string | null> {
-  const check = canRequestReturn(order.status, order.deliveredAt);
-  if (!check.allowed) return check.reason ?? "Return not allowed";
-
-  if (order.returnInfo?.requestedAt) {
-    return "Return already requested for this order";
-  }
-
-  applyStatusUpdate(order, "Return-Requested");
-  order.returnInfo = {
-    reason: reason.trim(),
-    requestedAt: new Date(),
-    status: "pending",
-  };
-  await order.save();
   return null;
 }

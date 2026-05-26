@@ -22,8 +22,9 @@ export function StorageBanner() {
       <p className="font-medium">Image uploads on Vercel need Blob storage</p>
       <p className="mt-1 text-amber-800">{status.hint}</p>
       <p className="mt-2 text-xs text-amber-700">
-        Until then, paste <strong>HTTPS image URLs</strong> when adding products (e.g. from
-        Imgur, your CDN, or Vercel Blob after setup). Public base: {status.publicBaseUrl}
+        For the filename-in-database flow, host on a server where
+        public/uploads/products is writable and served over HTTPS. Public base:{" "}
+        {status.publicBaseUrl}
       </p>
     </div>
   );

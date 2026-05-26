@@ -4,7 +4,7 @@ export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
-  role: "admin" | "seller" | "buyer";
+  role: "superadmin" | "admin" | "seller";
   sellerId?: mongoose.Types.ObjectId;
   phone?: string;
   address?: {
@@ -24,7 +24,7 @@ const userSchema = new Schema<IUser>(
     password: { type: String, required: true, select: false },
     role: {
       type: String,
-      enum: ["admin", "seller", "buyer"],
+      enum: ["superadmin", "admin", "seller"],
       default: "seller",
     },
     sellerId: { type: Schema.Types.ObjectId, ref: "Seller" },

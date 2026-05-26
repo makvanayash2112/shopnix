@@ -10,8 +10,6 @@ const nextConfig: NextConfig = {
       { source: "/api/:path*", destination: `${localApi}/api/:path*` },
       { source: "/ondc", destination: `${localApi}/ondc` },
       { source: "/ondc/:path*", destination: `${localApi}/ondc/:path*` },
-      { source: "/ondc-bap", destination: `${localApi}/ondc-bap` },
-      { source: "/ondc-bap/:path*", destination: `${localApi}/ondc-bap/:path*` },
       { source: "/uploads/:path*", destination: `${localApi}/uploads/:path*` },
     ];
   },

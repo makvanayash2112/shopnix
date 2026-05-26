@@ -17,13 +17,7 @@ export default function AdminLayout({
       router.replace("/login");
       return;
     }
-    apiFetch<{ role: string }>("/auth/me")
-      .then((u) => {
-        if (u.role === "buyer") {
-          router.replace("/shop");
-        }
-      })
-      .catch(() => router.replace("/login"));
+    apiFetch<{ role: string }>("/auth/me").catch(() => router.replace("/login"));
   }, [router]);
 
   return (

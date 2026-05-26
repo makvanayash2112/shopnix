@@ -29,10 +29,10 @@ export async function getSellerOndcReadiness(sellerId: string) {
 
   const withRealImages = publishedProducts.filter((p) =>
     (p.images ?? []).some(
-      (url) =>
-        url.startsWith("https://") &&
-        !url.includes("placehold.co") &&
-        !url.includes("localhost")
+      (image) =>
+        Boolean(image?.trim()) &&
+        !image.includes("placehold.co") &&
+        !image.includes("localhost")
     )
   ).length;
 
@@ -78,10 +78,10 @@ export async function getSellerOndcReadiness(sellerId: string) {
     },
     {
       id: "product_images",
-      label: "Published products have public HTTPS images",
+      label: "Published products have images",
       ok: publishedCount === 0 || withRealImages > 0,
       hint:
-        "Upload via Vercel Blob (BLOB_READ_WRITE_TOKEN) or paste HTTPS image URLs — not localhost or placeholders",
+        "On your own HTTPS domain, uploaded filenames resolve to /uploads/products/{filename}. Vercel needs Blob for persistent upload storage.",
     },
     {
       id: "provider_id",

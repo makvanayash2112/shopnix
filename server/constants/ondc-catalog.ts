@@ -46,7 +46,7 @@ export function isInvalidOndcImageUrl(url: string, baseUrl: string): boolean {
   if (PLACEHOLDER_RE.test(url)) return true;
   if (LOCAL_HOST_RE.test(url)) return true;
   const base = baseUrl.replace(/\/$/, "");
-  if (url.startsWith(`${base}/uploads/`)) return true;
+  if (process.env.VERCEL && url.startsWith(`${base}/uploads/`)) return true;
   return false;
 }
 
@@ -64,7 +64,11 @@ export function resolvePublicImageUrl(
   }
   if (url.startsWith("http")) return url;
   const base = baseUrl.replace(/\/$/, "");
-  const resolved = `${base}${url.startsWith("/") ? url : `/${url}`}`;
+  const normalized =
+    url.startsWith("/") || url.startsWith("uploads/")
+      ? url
+      : `/uploads/products/${url}`;
+  const resolved = `${base}${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
   if (isInvalidOndcImageUrl(resolved, baseUrl)) {
     return ondcFallbackImageUrl(seed);
   }

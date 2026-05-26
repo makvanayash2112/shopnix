@@ -10,7 +10,6 @@ type ServerlessHandler = (
 ) => Promise<unknown>;
 
 declare global {
-  // eslint-disable-next-line no-var
   var __shopnixServerless: ServerlessHandler | undefined;
 }
 

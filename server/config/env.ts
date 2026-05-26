@@ -30,8 +30,6 @@ export const env = {
   ondc: {
     bppId: process.env.ONDC_BPP_ID || defaultBppId,
     bppUri: process.env.ONDC_BPP_URI || `${siteUrl}/ondc`,
-    bapId: process.env.ONDC_BAP_ID || "",
-    bapUri: process.env.ONDC_BAP_URI || `${siteUrl}/ondc-bap`,
     domain: process.env.ONDC_DOMAIN || "ONDC:RET10",
     city: process.env.ONDC_CITY || "std:080",
     country: process.env.ONDC_COUNTRY || "IND",

@@ -1,129 +1,156 @@
-# Shopnix — ONDC Seller App
+# Shopnix ONDC Seller App
 
-Full-stack ONDC (Open Network for Digital Commerce) seller platform with **Next.js** admin UI, **Express.js** REST API, **MongoDB**, local product image storage, and **Beckn BPP** protocol endpoints.
+This is a seller-only ONDC Marketplace Seller Node (MSN/BPP). There is no buyer storefront and no BAP app in this project. Sellers register, complete store details, upload products, publish stock, and receive ONDC orders through the Beckn retail seller flow.
 
-## Stack
+## Project Structure
 
-| Layer | Tech |
-|-------|------|
-| Frontend | Next.js 16, React 19, Tailwind CSS 4 |
-| API | Express.js, Mongoose |
-| Database | MongoDB |
-| Auth | JWT + bcrypt |
-| ONDC | Beckn BPP routes (search, select, init, confirm, …) |
-| Images | Local `public/uploads/products/` → `http://localhost:4000/uploads/products/...` |
-
-## Project structure
-
-```
-shopnix/
-├── server/                 # Express API + ONDC BPP
-│   ├── config/
-│   ├── middleware/
-│   ├── models/
-│   ├── routes/
-│   ├── services/ondc/
-│   └── index.ts
-├── src/                    # Next.js seller admin
-│   ├── app/
-│   │   ├── admin/          # Dashboard, products, orders, ONDC
-│   │   ├── login/
-│   │   └── register/
-│   ├── components/
-│   └── lib/
-└── public/uploads/         # Product images (gitignored except .gitkeep)
+```text
+src/app                  Next.js pages and route handlers
+src/components/admin     Seller/admin UI
+src/components/ui        Shared UI controls
+src/lib                  Frontend API and route bridge helpers
+src/types                Frontend TypeScript types
+server/app.ts            Express app mounted by Next.js
+server/config            Environment and database setup
+server/models            MongoDB models
+server/routes            REST and ONDC routes
+server/services          ONDC catalog/order and seller services
+server/middleware        Auth, upload, ONDC signature middleware
+server/utils             Beckn, ONDC crypto, registry and response helpers
+server/scripts           One script: seed-superadmin.ts
+public/uploads/products  Local product image folder for own hosting
 ```
 
-## Quick start
+## Required Environment
 
-### 1. Prerequisites
+For local development copy `.env.example` to `.env`.
 
-- Node.js 20+
-- MongoDB running locally or Atlas URI
+```env
+MONGODB_URI=mongodb+srv://USER:PASS@cluster.mongodb.net/shopnix
+JWT_SECRET=change-this-to-a-long-random-secret
+JWT_EXPIRES_IN=7d
 
-### 2. Environment
+SUPERADMIN_EMAIL=admin@shopnix.com
+SUPERADMIN_PASSWORD=Shopnix@Admin2026
+SUPERADMIN_NAME=Shopnix Superadmin
+
+API_BASE_URL=https://your-domain.com
+NEXT_PUBLIC_APP_URL=https://your-domain.com
+
+ONDC_BPP_ID=your-domain.com
+ONDC_BPP_URI=https://your-domain.com/ondc
+ONDC_SUBSCRIBER_ID=your-domain.com
+ONDC_UNIQUE_KEY_ID=
+ONDC_SIGNING_PRIVATE_KEY=
+ONDC_SIGNING_PUBLIC_KEY=
+ONDC_DOMAIN=ONDC:RET10
+ONDC_CITY=std:080
+ONDC_COUNTRY=IND
+ONDC_MSN_CATALOG=true
+```
+
+For Vercel image uploads, also add:
+
+```env
+BLOB_READ_WRITE_TOKEN=
+```
+
+## Fresh Database Setup
+
+1. Clear your MongoDB database.
+2. Set the environment variables above.
+3. Run:
 
 ```bash
-cp .env.example .env
+npm run seed:superadmin
 ```
 
-Edit `.env` — set `MONGODB_URI`, `JWT_SECRET`, and ONDC fields after registration.
+This creates only one superadmin user. It does not create sellers or products.
 
-### 3. Install & run
+4. Open `/login` and sign in as the superadmin.
+5. Add real sellers through `/register` or by creating seller users from your admin process.
+6. Each seller logs in, completes store profile, adds products, uploads images, and publishes products.
+
+## Seller Requirements
+
+Each seller must have:
+
+- owner name
+- email and password
+- store name
+- phone
+- street, city, state and pincode
+- GSTIN or PAN
+
+A product appears in ONDC catalog only when:
+
+- seller is active
+- product is published
+- stock is above 0
+- at least one product image exists
+
+## Image Uploads
+
+MongoDB stores only image filenames.
+
+Own server:
+
+- file is saved in `public/uploads/products/{filename}`
+- public URL is `/uploads/products/{filename}`
+- make sure the server can write to `public/uploads/products`
+
+Vercel:
+
+- file is uploaded to Vercel Blob as `products/{filename}`
+- MongoDB still stores only `{filename}`
+- `/uploads/products/{filename}` redirects to the Blob URL
+- `BLOB_READ_WRITE_TOKEN` is required in Vercel environment variables
+
+## ONDC Seller Flow
+
+Seller-side BPP endpoints are under `/ondc`:
+
+- `POST /ondc/search` -> `on_search`
+- `POST /ondc/select` -> `on_select`
+- `POST /ondc/init` -> `on_init`
+- `POST /ondc/confirm` -> `on_confirm`
+- `POST /ondc/status` -> `on_status`
+- `POST /ondc/cancel` -> `on_cancel`
+- `POST /ondc/update` -> `on_update`
+- `POST /ondc/track` -> `on_track`
+- `POST /ondc/support` -> `on_support`
+
+Implemented production behavior:
+
+- `search` returns active sellers and published in-stock products.
+- `select` validates provider, item IDs, stock and selected quantity.
+- `init` creates an idempotent order per transaction.
+- `confirm` accepts COD order and reserves inventory.
+- seller status updates send `on_status` callback.
+- delivered COD orders are marked paid.
+
+## Commands
 
 ```bash
-npm install
 npm run dev
+npm run build
+npm run lint
+npm run seed:superadmin
 ```
 
-- **Admin UI:** http://localhost:3000  
-- **Express API:** http://localhost:4000  
-- **ONDC BPP base:** `http://localhost:4000/ondc` (configure in ONDC registry; use [ngrok](https://ngrok.com) for public URL in sandbox)
+## Vercel Checklist
 
-### 4. Register a seller
+1. Add MongoDB Atlas `MONGODB_URI`.
+2. Add `JWT_SECRET`.
+3. Add all `ONDC_*` values from ONDC portal.
+4. Add `BLOB_READ_WRITE_TOKEN` for product images.
+5. Set `API_BASE_URL` and `NEXT_PUBLIC_APP_URL` to your Vercel or custom domain.
+6. Register only the seller BPP URL in ONDC portal: `https://your-domain.com/ondc`.
+7. After deployment, test:
 
-1. Open http://localhost:3000/register  
-2. Create account → redirects to admin  
-3. Add products with images (stored under `public/uploads/products/`)  
-4. Configure ONDC BPP ID/URI under **Admin → ONDC**
-
-## ONDC BPP endpoints
-
-All accept Beckn `POST` with `{ context, message }`, return immediate `ACK`, then async `on_*` callback to `bap_uri`:
-
-| Incoming | Outgoing callback |
-|----------|-------------------|
-| `/ondc/search` | `on_search` (catalog) |
-| `/ondc/select` | `on_select` |
-| `/ondc/init` | `on_init` |
-| `/ondc/confirm` | `on_confirm` |
-| `/ondc/status` | `on_status` |
-| `/ondc/cancel` | `on_cancel` |
-| `/ondc/update` | `on_update` |
-| `/ondc/track` | `on_track` |
-| `/ondc/support` | `on_support` |
-
-Health: `GET /ondc`
-
-## REST API (authenticated)
-
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/auth/register` | Seller signup |
-| POST | `/api/auth/login` | Login |
-| GET | `/api/auth/me` | Current user |
-| CRUD | `/api/products` | Products + image upload |
-| GET/PATCH | `/api/orders` | Order list & status |
-| GET/PUT | `/api/seller/profile` | Store + ONDC settings |
-| GET | `/api/seller/stats` | Dashboard stats |
-
-## Product image URLs
-
-Uploaded files are saved as:
-
-`http://localhost:4000/uploads/products/<filename>.jpg`
-
-Next.js rewrites `/uploads/*` to the API in development so images work in the admin UI.
-
-## ONDC network registration
-
-1. Complete seller onboarding on the ONDC portal (sandbox/preprod).  
-2. Set `ONDC_BPP_ID`, `ONDC_BPP_URI` (public HTTPS URL), signing keys in `.env`.  
-3. Expose local API via ngrok: `ngrok http 4000` → use HTTPS URL + `/ondc` as BPP URI.  
-4. Publish products with **Publish on ONDC catalog** enabled and stock &gt; 0.
-
-> **Note:** Production ONDC requires Ed25519 signing and registry verification. This project implements the Beckn flow and callbacks; add signing middleware before going live.
-
-## Scripts
-
-| Command | Description |
-|---------|-------------|
-| `npm run dev` | API + Next.js together |
-| `npm run dev:server` | Express only |
-| `npm run dev:next` | Next.js only |
-| `npm run server` | Express (no watch) |
-| `npm run build` | Next.js production build |
-
-## License
-
-Private — Shopnix ONDC seller application.
+```text
+GET /api/health
+GET /ondc
+GET /ondc/test-catalog?mode=pramaan
+GET /uploads/products/{filename}
+```

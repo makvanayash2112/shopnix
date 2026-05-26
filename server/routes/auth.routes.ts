@@ -17,10 +17,37 @@ router.post("/register", async (req, res) => {
       email?: string;
       password?: string;
       storeName?: string;
+      phone?: string;
+      gstin?: string;
+      pan?: string;
+      address?: {
+        street?: string;
+        city?: string;
+        state?: string;
+        pincode?: string;
+      };
     };
 
-    if (!name || !email || !password) {
-      return sendError(res, "Name, email and password are required");
+    const phone = req.body.phone?.trim();
+    const address = req.body.address ?? {};
+    const hasTaxId = Boolean(req.body.gstin?.trim() || req.body.pan?.trim());
+
+    if (
+      !name?.trim() ||
+      !email?.trim() ||
+      !password ||
+      !storeName?.trim() ||
+      !phone ||
+      !address.street?.trim() ||
+      !address.city?.trim() ||
+      !address.state?.trim() ||
+      !address.pincode?.trim() ||
+      !hasTaxId
+    ) {
+      return sendError(
+        res,
+        "Name, email, password, store name, phone, full store address and GSTIN or PAN are required"
+      );
     }
 
     const exists = await User.findOne({ email: email.toLowerCase() });
@@ -29,8 +56,18 @@ router.post("/register", async (req, res) => {
     }
 
     const seller = await Seller.create({
-      storeName: storeName || env.defaultStoreName,
+      storeName: storeName.trim(),
       email: email.toLowerCase(),
+      phone,
+      gstin: req.body.gstin?.trim(),
+      pan: req.body.pan?.trim(),
+      address: {
+        street: address.street.trim(),
+        city: address.city.trim(),
+        state: address.state.trim(),
+        pincode: address.pincode.trim(),
+        country: "India",
+      },
       ondc: {
         bppId: env.ondc.bppId,
         bppUri: env.ondc.bppUri,
@@ -50,6 +87,8 @@ router.post("/register", async (req, res) => {
       password: hashed,
       role: "seller",
       sellerId: seller._id,
+      phone,
+      address: seller.address,
     });
 
     const token = jwt.sign({ userId: user._id }, env.jwtSecret, {
@@ -91,14 +130,6 @@ router.post("/login", async (req, res) => {
 
     if (!user || !(await bcrypt.compare(password, user.password))) {
       return sendError(res, "Invalid credentials", 401);
-    }
-
-    if (user.role === "buyer") {
-      return sendError(
-        res,
-        "This is a buyer account. Please sign in at /shop/login",
-        403
-      );
     }
 
     const token = jwt.sign({ userId: user._id }, env.jwtSecret, {

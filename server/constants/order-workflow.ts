@@ -1,4 +1,3 @@
-/** E-commerce order lifecycle */
 export const ORDER_STATUSES = [
   "Created",
   "Accepted",
@@ -13,14 +12,6 @@ export const ORDER_STATUSES = [
 
 export type OrderStatus = (typeof ORDER_STATUSES)[number];
 
-/** Buyer may cancel only before out-for-delivery */
-export const BUYER_CANCELLABLE: OrderStatus[] = [
-  "Created",
-  "Accepted",
-  "Packed",
-];
-
-/** Seller manual updates (forward flow) */
 export const SELLER_STATUS_FLOW: Record<string, OrderStatus[]> = {
   Created: ["Accepted", "Cancelled"],
   Accepted: ["Packed", "Cancelled"],
@@ -41,12 +32,12 @@ export const RETURN_POLICY = {
   windowDays: RETURN_WINDOW_DAYS,
   title: "7-Day Return Policy",
   summary:
-    "You may request a return within 7 calendar days after delivery. Items must be unused and in original packaging.",
+    "Returns can be handled by the seller within 7 calendar days after delivery.",
   rules: [
     "Return window starts when order status is Delivered.",
     "Cash refunds are processed after seller approves the return.",
     "Orders cannot be cancelled once status is Delivering or Delivered.",
-    "Return not available for Cancelled or already Returned orders.",
+    "Return is not available for Cancelled or already Returned orders.",
   ],
 };
 
@@ -56,44 +47,18 @@ export function normalizeLegacyStatus(status: string): OrderStatus {
   return status as OrderStatus;
 }
 
-export function canBuyerCancel(status: string): boolean {
-  return BUYER_CANCELLABLE.includes(normalizeLegacyStatus(status));
-}
-
-export function canRequestReturn(
-  status: string,
-  deliveredAt?: Date | null
-): { allowed: boolean; reason?: string } {
-  const s = normalizeLegacyStatus(status);
-  if (s !== "Delivered") {
-    return { allowed: false, reason: "Return only after order is delivered" };
-  }
-  if (!deliveredAt) {
-    return { allowed: false, reason: "Delivery date not recorded" };
-  }
-  const deadline = new Date(deliveredAt);
-  deadline.setDate(deadline.getDate() + RETURN_WINDOW_DAYS);
-  if (new Date() > deadline) {
-    return {
-      allowed: false,
-      reason: `Return window closed (${RETURN_WINDOW_DAYS} days after delivery)`,
-    };
-  }
-  return { allowed: true };
-}
-
 export function fulfillmentLabel(status: string): string {
   const map: Record<string, string> = {
     Created: "Order placed",
     Accepted: "Confirmed by seller",
-    Packed: "Packed & ready to ship",
+    Packed: "Packed and ready to ship",
     Delivering: "Out for delivery",
     Delivered: "Delivered",
     Cancelled: "Cancelled",
     "Return-Requested": "Return requested",
     "Return-Approved": "Return approved",
     Returned: "Return completed",
-    "In-progress": "Packed & ready to ship",
+    "In-progress": "Packed and ready to ship",
     Completed: "Delivered",
   };
   return map[status] ?? status;

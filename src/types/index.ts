@@ -2,23 +2,8 @@ export interface User {
   id: string;
   name: string;
   email: string;
-  role: "admin" | "seller" | "buyer";
+  role: "superadmin" | "admin" | "seller";
   sellerId?: string;
-}
-
-export interface BuyerUser {
-  id: string;
-  name: string;
-  email: string;
-  role: "buyer";
-  phone?: string;
-  address?: {
-    street?: string;
-    city?: string;
-    state?: string;
-    pincode?: string;
-  };
-  createdAt?: string;
 }
 
 export interface Category {
@@ -94,8 +79,7 @@ export interface Order {
   _id: string;
   orderId: string;
   transactionId: string;
-  buyerId?: string;
-  channel?: "buyer" | "ondc";
+  channel?: "ondc";
   status: string;
   items: {
     name: string;

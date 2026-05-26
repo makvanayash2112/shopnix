@@ -24,6 +24,7 @@ import {
   buildOrderMessage,
   createOrderFromInit,
   findOrderByTransaction,
+  reserveOrderInventory,
   updateOrderStatus,
 } from "../services/ondc/order.service";
 import { env } from "../config/env";
@@ -35,6 +36,15 @@ type BecknBody = {
   context: BecknContext;
   message?: Record<string, unknown>;
 };
+
+type BecknSelectedItem = {
+  id: string;
+  quantity?: { count?: number };
+};
+
+function selectedQuantity(item: BecknSelectedItem): number {
+  return Math.max(1, Number(item.quantity?.count ?? 1));
+}
 
 function ack(res: import("express").Response) {
   return res.status(200).json(buildAckResponse());
@@ -181,7 +191,7 @@ router.post("/search", async (req, res) => {
 
     const msn = useMsnCatalog();
     let entries: Awaited<ReturnType<typeof getNetworkCatalogEntries>>;
-    let npType: "SNP" | "MSN" = msn ? "MSN" : "SNP";
+    const npType: "SNP" | "MSN" = msn ? "MSN" : "SNP";
 
     if (msn) {
       entries = await getNetworkCatalogEntries();
@@ -314,12 +324,24 @@ router.post("/select", async (req, res) => {
     }
 
     const selectItems =
-      (body.message?.order as { items?: { id: string }[] })?.items ?? [];
+      (body.message?.order as { items?: BecknSelectedItem[] })?.items ?? [];
     const matched = products.filter((p) =>
       selectItems.some((i) => i.id === p.ondcItemId)
     );
+    if (selectItems.length === 0 || matched.length !== selectItems.length) {
+      throw new Error("Selected ONDC items are not available for this provider");
+    }
+    for (const product of matched) {
+      const selected = selectItems.find((i) => i.id === product.ondcItemId)!;
+      if (product.quantity < selectedQuantity(selected)) {
+        throw new Error(`Insufficient stock for ${product.ondcItemId}`);
+      }
+    }
     const context = replyContext(body.context, "on_select");
-    const quoteValue = matched.reduce((s, p) => s + p.price, 0);
+    const quoteValue = matched.reduce((sum, product) => {
+      const selected = selectItems.find((i) => i.id === product.ondcItemId);
+      return sum + product.price * selectedQuantity(selected!);
+    }, 0);
 
     logOndcBpp("select matched items", {
       transaction_id: context.transaction_id,
@@ -334,18 +356,27 @@ router.post("/select", async (req, res) => {
         items: matched.map((p) => ({
           id: p.ondcItemId,
           fulfillment_id: "F1",
-          quantity: { count: 1 },
+          quantity: {
+            count: selectedQuantity(
+              selectItems.find((i) => i.id === p.ondcItemId)!
+            ),
+          },
         })),
         provider: {
           id: seller.ondcProviderId || `SHOPNIX_${seller._id.toString().slice(-8)}`,
         },
         quote: {
           price: { currency: "INR", value: String(quoteValue) },
-          breakup: matched.map((p) => ({
-            title: p.name,
-            price: { currency: "INR", value: String(p.price) },
-            item: { id: p.ondcItemId },
-          })),
+          breakup: matched.map((p) => {
+            const qty = selectedQuantity(
+              selectItems.find((i) => i.id === p.ondcItemId)!
+            );
+            return {
+              title: p.name,
+              price: { currency: "INR", value: String(p.price * qty) },
+              item: { id: p.ondcItemId },
+            };
+          }),
         },
         ...(order ? { id: order.orderId } : {}),
       },
@@ -358,14 +389,23 @@ router.post("/init", async (req, res) => {
 
   await ackAfterWork(res, "init", async () => {
     const orderMsg = body.message?.order as {
+      provider?: { id?: string };
       items?: { id: string; quantity?: { count?: number } }[];
       billing?: Record<string, unknown>;
     };
 
+    const providerId = orderMsg?.provider?.id;
+    logOndcBpp("init — creating order", {
+      transaction_id: body.context.transaction_id,
+      provider_id: providerId,
+      itemCount: orderMsg?.items?.length,
+    });
+
     const order = await createOrderFromInit(
       body.context,
       orderMsg?.items ?? [],
-      orderMsg?.billing as Record<string, unknown>
+      orderMsg?.billing as Record<string, unknown>,
+      providerId
     );
 
     const context = replyContext(body.context, "on_init");
@@ -379,6 +419,9 @@ router.post("/confirm", async (req, res) => {
   await ackAfterWork(res, "confirm", async () => {
     const order = await findOrderByTransaction(body.context.transaction_id);
     if (!order) return;
+    if (order.status === "Created") {
+      await reserveOrderInventory(order);
+    }
 
     order.status = "Accepted";
     order.fulfillment = order.fulfillment || { type: "Delivery" };

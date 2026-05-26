@@ -14,6 +14,11 @@ type Props = {
   submitLabel?: string;
 };
 
+function imageSrc(image: string) {
+  if (image.startsWith("http") || image.startsWith("/")) return image;
+  return `/uploads/products/${image}`;
+}
+
 export function ProductForm({
   initial,
   onSubmit,
@@ -33,8 +38,7 @@ export function ProductForm({
     e.preventDefault();
     setLoading(true);
     setError("");
-    const form = e.currentTarget;
-    const fd = new FormData(form);
+    const fd = new FormData(e.currentTarget);
     if (files) {
       Array.from(files).forEach((f) => fd.append("images", f));
     }
@@ -81,7 +85,7 @@ export function ProductForm({
         </label>
         <Input label="Brand" name="brand" defaultValue={initial?.brand} />
         <Input
-          label="Price (₹)"
+          label="Price"
           name="price"
           type="number"
           min="0"
@@ -90,7 +94,7 @@ export function ProductForm({
           defaultValue={initial?.price}
         />
         <Input
-          label="MRP (₹)"
+          label="MRP"
           name="mrp"
           type="number"
           min="0"
@@ -105,17 +109,13 @@ export function ProductForm({
           required
           defaultValue={initial?.quantity ?? 0}
         />
-        <Input
-          label="Unit"
-          name="unit"
-          defaultValue={initial?.unit ?? "unit"}
-        />
+        <Input label="Unit" name="unit" defaultValue={initial?.unit ?? "unit"} />
       </div>
 
       {initial?.ondcItemId && (
         <p className="rounded-lg bg-slate-50 px-3 py-2 text-xs text-slate-600">
           ONDC item ID: <code className="font-mono">{initial.ondcItemId}</code>{" "}
-          (auto-assigned per store; same SKU can exist on another seller&apos;s store)
+          (auto-assigned per store; same SKU can exist on another seller store)
         </p>
       )}
 
@@ -137,21 +137,7 @@ export function ProductForm({
           defaultChecked={initial?.isPublished !== false}
           className="rounded border-slate-300 text-emerald-600"
         />
-        Publish on ONDC catalog (requires image + stock &gt; 0)
-      </label>
-
-      <label className="block space-y-1.5">
-        <span className="text-sm font-medium text-slate-700">
-          Image URLs (HTTPS, one per line — works on Vercel without Blob)
-        </span>
-        <textarea
-          name="imageUrls"
-          rows={3}
-          placeholder={
-            "https://shopnix-nine.vercel.app/uploads/products/example.jpg\nhttps://your-cdn.com/photo.png"
-          }
-          className="w-full rounded-lg border border-slate-200 px-3 py-2 font-mono text-xs"
-        />
+        Publish on ONDC catalog (requires image and stock above 0)
       </label>
 
       {existingImages.length > 0 && (
@@ -163,14 +149,20 @@ export function ProductForm({
             {existingImages.map((url) => (
               <div key={url} className="relative">
                 <div className="relative h-24 w-24 overflow-hidden rounded-lg border">
-                  <Image src={url} alt="" fill className="object-cover" unoptimized />
+                  <Image
+                    src={imageSrc(url)}
+                    alt=""
+                    fill
+                    className="object-cover"
+                    unoptimized
+                  />
                 </div>
                 <button
                   type="button"
                   onClick={() => setRemoveUrls((r) => [...r, url])}
                   className="absolute -right-1 -top-1 rounded-full bg-red-500 px-1.5 text-xs text-white"
                 >
-                  ×
+                  x
                 </button>
               </div>
             ))}
@@ -180,7 +172,7 @@ export function ProductForm({
 
       <label className="block space-y-1.5">
         <span className="text-sm font-medium text-slate-700">
-          Upload image files (optional if URLs added above)
+          Upload image files
         </span>
         <input
           type="file"
@@ -192,11 +184,13 @@ export function ProductForm({
       </label>
 
       {error && (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
+          {error}
+        </p>
       )}
 
       <Button type="submit" disabled={loading}>
-        {loading ? "Saving…" : submitLabel}
+        {loading ? "Saving..." : submitLabel}
       </Button>
     </form>
   );

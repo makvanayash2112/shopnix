@@ -31,7 +31,7 @@ router.post("/on_subscribe", async (req, res) => {
   return res.status(501).json(
     buildNackResponse({
       message:
-        "Configure on_subscribe: use ONDC reference utility or set ONDC_ON_SUBSCRIBE_ANSWER after decrypting challenge. See docs/SELLER_ONDC_GUIDE.md",
+        "Configure on_subscribe: use ONDC reference utility or set ONDC_ON_SUBSCRIBE_ANSWER after decrypting challenge. See README.md.",
     })
   );
 });

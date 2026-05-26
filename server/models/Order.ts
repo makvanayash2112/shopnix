@@ -11,7 +11,7 @@ export interface IOrderItem {
   price: number;
 }
 
-export type OrderChannel = "buyer" | "ondc";
+export type OrderChannel = "ondc";
 export type PaymentMethod = "cash";
 
 export interface IReturnInfo {
@@ -25,7 +25,6 @@ export interface IReturnInfo {
 
 export interface IOrder extends Document {
   sellerId: mongoose.Types.ObjectId;
-  buyerId?: mongoose.Types.ObjectId;
   orderId: string;
   transactionId: string;
   channel: OrderChannel;
@@ -59,13 +58,12 @@ export interface IOrder extends Document {
 const orderSchema = new Schema<IOrder>(
   {
     sellerId: { type: Schema.Types.ObjectId, ref: "Seller", required: true },
-    buyerId: { type: Schema.Types.ObjectId, ref: "User", index: true },
     orderId: { type: String, required: true, unique: true },
     transactionId: { type: String, required: true, index: true },
     channel: {
       type: String,
-      enum: ["buyer", "ondc"],
-      default: "buyer",
+      enum: ["ondc"],
+      default: "ondc",
     },
     bapOrderId: String,
     status: {

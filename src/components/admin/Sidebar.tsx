@@ -5,12 +5,11 @@ import { usePathname } from "next/navigation";
 import { clearToken } from "@/lib/api";
 
 const links = [
-  { href: "/admin", label: "Dashboard", icon: "◉" },
-  { href: "/shop", label: "View buyer shop", icon: "🛍" },
-  { href: "/admin/products", label: "Products", icon: "▣" },
-  { href: "/admin/orders", label: "Orders", icon: "◎" },
-  { href: "/admin/settings", label: "Store profile", icon: "👤" },
-  { href: "/admin/ondc", label: "ONDC", icon: "⇄" },
+  { href: "/admin", label: "Dashboard", icon: "D" },
+  { href: "/admin/products", label: "Products", icon: "P" },
+  { href: "/admin/orders", label: "Orders", icon: "O" },
+  { href: "/admin/settings", label: "Store profile", icon: "S" },
+  { href: "/admin/ondc", label: "ONDC", icon: "N" },
 ];
 
 export function Sidebar() {
@@ -23,7 +22,7 @@ export function Sidebar() {
           Shopnix
         </p>
         <h1 className="mt-1 text-lg font-bold">Seller Admin</h1>
-        <p className="text-xs text-slate-400">ONDC BPP Console</p>
+        <p className="text-xs text-slate-400">ONDC MSN Console</p>
       </div>
 
       <nav className="flex-1 space-y-1 p-3">
@@ -41,7 +40,9 @@ export function Sidebar() {
                   : "text-slate-300 hover:bg-slate-800 hover:text-white"
               }`}
             >
-              <span className="text-base opacity-80">{link.icon}</span>
+              <span className="flex h-5 w-5 items-center justify-center rounded bg-slate-800 text-[10px] font-semibold opacity-90">
+                {link.icon}
+              </span>
               {link.label}
             </Link>
           );

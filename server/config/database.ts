@@ -7,9 +7,7 @@ interface MongooseCache {
 }
 
 declare global {
-  // eslint-disable-next-line no-var
   var __shopnixMongoose: MongooseCache | undefined;
-  // eslint-disable-next-line no-var
   var __shopnixDbLogged: boolean | undefined;
 }
 
@@ -60,7 +58,7 @@ export async function connectDatabase(): Promise<typeof mongoose> {
         }
         
         // Log all database steps (queries, updates, inserts)
-        mongoose.set("debug", (collectionName, method, query, doc) => {
+        mongoose.set("debug", (collectionName, method, query) => {
           console.log(`[DB STEP] ${collectionName}.${method} | Query:`, JSON.stringify(query));
         });
         

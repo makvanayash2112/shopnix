@@ -31,8 +31,7 @@ export default function HomePage() {
             Sell on ONDC — automated product sync & order management
           </h2>
           <p className="mt-6 text-lg text-slate-300">
-            Create your seller account, add products, and automatically list them on the ONDC
-            network. Your products sync instantly to all ONDC buyers. Cash on delivery payments.
+            Join the ONDC Marketplace as a Seller Node (MSN). Create your seller account, add products, and automatically list them across the ONDC network. Your inventory is exposed through the seller BPP with Cash on Delivery support.
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
             <Link href="/admin">
@@ -52,17 +51,17 @@ export default function HomePage() {
           {[
             {
               title: "Seller dashboard",
-              desc: "Manage products, orders, and store profile. Track ONDC listings in real-time.",
+              desc: "Manage products, orders, and store profile. Track ONDC MSN listings in real-time.",
               href: "/admin",
             },
             {
               title: "Product catalog",
-              desc: "Add, edit, and publish products to ONDC network automatically.",
+              desc: "Add, edit, and publish products to ONDC network. Sync inventory automatically.",
               href: "/admin/products",
             },
             {
               title: "Order management",
-              desc: "View and manage orders from ONDC buyers. Cash on delivery integration.",
+              desc: "View and manage ONDC orders. Complete fulfillment workflows.",
               href: "/admin/orders",
             },
           ].map((f) => (

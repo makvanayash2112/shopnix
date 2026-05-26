@@ -3,11 +3,10 @@ import { Seller } from "../models/Seller";
 import { Product } from "../models/Product";
 import { User } from "../models/User";
 
-const ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "admin@shopnix.com").toLowerCase();
+const ADMIN_EMAIL = (
+  process.env.ADMIN_EMAIL || "admin@shopnix.com"
+).toLowerCase();
 
-/**
- * Primary store seller — admin's seller profile (not random findOne()).
- */
 export async function getPrimarySeller() {
   const adminUser = await User.findOne({ email: ADMIN_EMAIL });
   if (adminUser?.sellerId) {
@@ -47,66 +46,6 @@ export async function getPrimarySeller() {
   return seller;
 }
 
-/** @deprecated Use getPrimarySeller */
 export async function getDefaultSeller() {
   return getPrimarySeller();
-}
-
-export interface ResolvedOrderLine {
-  product: InstanceType<typeof Product>;
-  quantity: number;
-}
-
-/**
- * Resolve seller from cart lines — order belongs to product owner(s).
- */
-export async function resolveSellerFromOrderLines(
-  items: { productId: string; quantity: number }[]
-): Promise<
-  | { ok: true; seller: InstanceType<typeof Seller>; lines: ResolvedOrderLine[] }
-  | { ok: false; message: string }
-> {
-  if (!items.length) {
-    return { ok: false, message: "No items in order" };
-  }
-
-  const lines: ResolvedOrderLine[] = [];
-  const sellerIds = new Set<string>();
-
-  for (const line of items) {
-    const product = await Product.findOne({
-      _id: line.productId,
-      isPublished: true,
-    });
-
-    if (!product) {
-      return { ok: false, message: `Product not found: ${line.productId}` };
-    }
-
-    if (product.quantity < line.quantity) {
-      return {
-        ok: false,
-        message: `Insufficient stock for ${product.name}`,
-      };
-    }
-
-    sellerIds.add(product.sellerId.toString());
-    lines.push({ product, quantity: line.quantity });
-  }
-
-  if (sellerIds.size > 1) {
-    return {
-      ok: false,
-      message:
-        "Cart has products from multiple stores. Please checkout one store at a time.",
-    };
-  }
-
-  const sellerId = [...sellerIds][0];
-  const seller = await Seller.findById(sellerId);
-  if (!seller) {
-    return { ok: false, message: "Seller store not found for these products" };
-  }
-
-  return { ok: true, seller, lines };
 }

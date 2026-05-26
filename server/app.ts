@@ -5,7 +5,6 @@ import apiRoutes from "./routes";
 import ondcRoutes from "./routes/ondc.routes";
 import ondcSubscribeRoutes from "./routes/ondc-subscribe.routes";
 import ondcGuideRoutes from "./routes/ondc-guide.routes";
-import ondcBapRoutes from "./routes/ondc-bap.routes";
 import { getSiteUrl } from "./lib/site-url";
 import { logOndcEnvConfig } from "./utils/ondc-debug";
 
@@ -35,7 +34,7 @@ export function createApp() {
   // app.use(express.json({ limit: "2mb" }));
   app.use(
     express.json({
-      verify: (req: any, res, buf) => {
+      verify: (req: express.Request & { rawBody?: string }, _res, buf) => {
         req.rawBody = buf.toString("utf8");
       },
       limit: "2mb",
@@ -63,7 +62,7 @@ export function createApp() {
       try {
         const parsed = typeof body === "string" ? JSON.parse(body) : body;
         console.log(`[RESPONSE PAYLOAD]:\n`, JSON.stringify(parsed, null, 2));
-      } catch (e) {
+      } catch {
         console.log(`[RESPONSE PAYLOAD]:\n`, body);
       }
       return originalSend.call(this, body);
@@ -79,24 +78,20 @@ export function createApp() {
   app.use("/api", apiRoutes);
 
   /** ONDC registry paths (same domain root — required for Vercel + ONDC portal) */
-  /** Seller (BPP) only — buyer BAP routes disabled unless ONDC_ENABLE_BAP=true */
+  /** Seller (BPP/MSN) only. Buyer BAP routes are intentionally not mounted. */
   app.use("/ondc", ondcSubscribeRoutes);
   app.use("/ondc", ondcRoutes);
   app.use("/ondc", ondcGuideRoutes);
-  if (process.env.ONDC_ENABLE_BAP === "true") {
-    app.use("/ondc-bap", ondcBapRoutes);
-    console.log("[ONDC] BAP routes enabled (ONDC_ENABLE_BAP=true)");
-  } else {
-    console.log("[ONDC] Seller-only mode: /ondc-bap not mounted");
-  }
+  console.log("[ONDC] Seller-only mode: BAP routes removed");
 
   app.use(
     (
       err: Error,
       _req: express.Request,
       res: express.Response,
-      _next: express.NextFunction
+      next: express.NextFunction
     ) => {
+      void next;
       console.error("[api error]", err.message);
       res.status(500).json({ success: false, message: err.message });
     }

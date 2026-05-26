@@ -9,6 +9,11 @@ import { Card } from "@/components/ui/Card";
 import { StorageBanner } from "@/components/admin/StorageBanner";
 import type { OndcReadiness, Product } from "@/types";
 
+function imageSrc(image: string) {
+  if (image.startsWith("http") || image.startsWith("/")) return image;
+  return `/uploads/products/${image}`;
+}
+
 export default function ProductsPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [readiness, setReadiness] = useState<OndcReadiness | null>(null);
@@ -102,7 +107,7 @@ export default function ProductsPage() {
             <div className="relative h-40 bg-slate-100">
               {p.images?.[0] ? (
                 <Image
-                  src={p.images[0]}
+                  src={imageSrc(p.images[0])}
                   alt={p.name}
                   fill
                   className="object-cover"

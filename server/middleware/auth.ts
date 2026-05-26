@@ -43,19 +43,22 @@ export function requireAdmin(
   res: Response,
   next: NextFunction
 ) {
-  if (!req.user || (req.user.role !== "admin" && req.user.role !== "seller")) {
+  if (
+    !req.user ||
+    !["superadmin", "admin", "seller"].includes(req.user.role)
+  ) {
     return sendError(res, "Seller access required", 403);
   }
   next();
 }
 
-export function requireBuyer(
+export function requireSuperAdmin(
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ) {
-  if (!req.user || req.user.role !== "buyer") {
-    return sendError(res, "Buyer login required", 403);
+  if (!req.user || req.user.role !== "superadmin") {
+    return sendError(res, "Superadmin access required", 403);
   }
   next();
 }

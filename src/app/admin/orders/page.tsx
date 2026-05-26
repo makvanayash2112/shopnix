@@ -21,7 +21,7 @@ export default function OrdersPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold">Orders</h1>
-          <p className="text-slate-500">Orders from ONDC buyer apps (BAP)</p>
+          <p className="text-slate-500">Orders received through ONDC</p>
         </div>
         <select
           value={filter}
@@ -63,7 +63,7 @@ export default function OrdersPage() {
                   </td>
                   <td className="py-3 pr-4">{o.items.length}</td>
                   <td className="py-3 pr-4 capitalize text-slate-600">
-                    {o.channel ?? "buyer"}
+                    {o.channel ?? "ondc"}
                   </td>
                   <td className="py-3 pr-4 text-slate-600">
                     {o.payment.method === "cash" ? "Cash (COD)" : o.payment.method ?? "—"}
