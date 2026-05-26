@@ -15,10 +15,19 @@ export function applyStatusUpdate(order: IOrder, nextStatus: OrderStatus) {
   if (nextStatus === "Packed") {
     order.fulfillment.state = "Packed";
   }
+  // if (nextStatus === "Delivering") {
+  //   order.fulfillment.state = "Out-for-delivery";
+  //   order.fulfillment.tracking =
+  //     order.fulfillment.tracking || `TRK-${order.orderId}`;
+  // }
   if (nextStatus === "Delivering") {
     order.fulfillment.state = "Out-for-delivery";
-    order.fulfillment.tracking =
-      order.fulfillment.tracking || `TRK-${order.orderId}`;
+
+    order.fulfillment.tracking = true;
+
+    order.fulfillment.tracking_url =
+      order.fulfillment.tracking_url ||
+      `https://shopnix-nine.vercel.app/track/${order.orderId}`;
   }
   if (nextStatus === "Delivered") {
     order.fulfillment.state = "Delivered";
