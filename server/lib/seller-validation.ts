@@ -44,13 +44,13 @@ export function validateSellerIdentity(input: {
     return "Enter a valid 10 character PAN";
   }
 
-  if (!input.gstin && !input.pan) {
-    return "GSTIN or PAN is required for seller onboarding";
-  }
+  // if (!input.gstin && !input.pan) {
+  //   return "GSTIN or PAN is required for seller onboarding";
+  // }
 
-  if (input.gstin && input.pan && input.gstin.slice(2, 12) !== input.pan) {
-    return "PAN must match characters 3 to 12 of GSTIN";
-  }
+  // if (input.gstin && input.pan && input.gstin.slice(2, 12) !== input.pan) {
+  //   return "PAN must match characters 3 to 12 of GSTIN";
+  // }
 
   return null;
 }
