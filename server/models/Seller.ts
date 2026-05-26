@@ -58,6 +58,7 @@ const sellerSchema = new Schema<ISeller>(
     ondcProviderId: {
       type: String,
       unique: true,
+      sparse: true,
     },
     fulfillment: {
       type: {

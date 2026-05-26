@@ -1,6 +1,10 @@
 import { Product } from "../../models/Product";
 import { Seller } from "../../models/Seller";
-import type { ISeller } from "../../models/Seller";
+
+type ProviderIdSource = {
+  _id: { toString(): string };
+  storeName: string;
+};
 
 export type OndcReadinessCheck = {
   id: string;
@@ -106,7 +110,9 @@ export async function getSellerOndcReadiness(sellerId: string) {
   };
 }
 
-export function assignOndcProviderId(seller: ISeller): string {
+export function assignOndcProviderId(
+  seller: ProviderIdSource
+): string {
   const base = seller.storeName
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "_")

@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import { ensureProductIndexes } from "../lib/ensure-indexes";
+import { Seller } from "../models/Seller";
 
 interface MongooseCache {
   conn: typeof mongoose | null;
@@ -54,6 +55,9 @@ export async function connectDatabase(): Promise<typeof mongoose> {
           global.__shopnixDbLogged = true;
           void ensureProductIndexes().catch((e) =>
             console.warn("[db] Product index sync:", e instanceof Error ? e.message : e)
+          );
+          void Seller.syncIndexes().catch((e) =>
+            console.warn("[db] Seller index sync:", e instanceof Error ? e.message : e)
           );
         }
         

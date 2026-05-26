@@ -43,10 +43,7 @@ export function requireAdmin(
   res: Response,
   next: NextFunction
 ) {
-  if (
-    !req.user ||
-    !["superadmin", "admin", "seller"].includes(req.user.role)
-  ) {
+  if (!req.user || !["superadmin", "seller"].includes(req.user.role)) {
     return sendError(res, "Seller access required", 403);
   }
   next();

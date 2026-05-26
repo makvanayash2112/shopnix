@@ -1,5 +1,6 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
+import { Types } from "mongoose";
 import jwt, { type SignOptions } from "jsonwebtoken";
 import { env } from "../config/env";
 import { User } from "../models/User";
@@ -50,17 +51,46 @@ router.post("/register", async (req, res) => {
       );
     }
 
-    const exists = await User.findOne({ email: email.toLowerCase() });
-    if (exists) {
+    const normalizedEmail = email.toLowerCase();
+    const normalizedPhone = phone.replace(/\s+/g, "");
+    const normalizedGstin = req.body.gstin?.trim().toUpperCase();
+    const normalizedPan = req.body.pan?.trim().toUpperCase();
+
+    const [existingUser, existingSellerEmail, existingSellerPhone, existingSellerGstin, existingSellerPan] =
+      await Promise.all([
+        User.findOne({ email: normalizedEmail }),
+        Seller.findOne({ email: normalizedEmail }),
+        normalizedPhone ? Seller.findOne({ phone: normalizedPhone }) : null,
+        normalizedGstin ? Seller.findOne({ gstin: normalizedGstin }) : null,
+        normalizedPan ? Seller.findOne({ pan: normalizedPan }) : null,
+      ]);
+
+    if (existingUser || existingSellerEmail) {
       return sendError(res, "Email already registered", 409);
     }
+    if (existingSellerPhone) {
+      return sendError(res, "Phone number already registered", 409);
+    }
+    if (existingSellerGstin) {
+      return sendError(res, "GSTIN already registered", 409);
+    }
+    if (existingSellerPan) {
+      return sendError(res, "PAN already registered", 409);
+    }
+
+    const sellerId = new Types.ObjectId();
+    const ondcProviderId = assignOndcProviderId({
+      _id: sellerId,
+      storeName: storeName.trim(),
+    });
 
     const seller = await Seller.create({
+      _id: sellerId,
       storeName: storeName.trim(),
-      email: email.toLowerCase(),
-      phone,
-      gstin: req.body.gstin?.trim(),
-      pan: req.body.pan?.trim(),
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      gstin: normalizedGstin,
+      pan: normalizedPan,
       address: {
         street: address.street.trim(),
         city: address.city.trim(),
@@ -76,18 +106,17 @@ router.post("/register", async (req, res) => {
         isActive: true,
         subscriberId: env.ondc.subscriberId || env.ondc.bppId,
       },
+      ondcProviderId,
     });
-    seller.ondcProviderId = assignOndcProviderId(seller);
-    await seller.save();
 
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({
       name,
-      email: email.toLowerCase(),
+      email: normalizedEmail,
       password: hashed,
       role: "seller",
       sellerId: seller._id,
-      phone,
+      phone: normalizedPhone,
       address: seller.address,
     });
 
