@@ -110,8 +110,14 @@ export interface Order {
     amount: number;
     status?: string;
     type?: string;
+    collected_by?: string;
   };
-  fulfillment?: { type?: string; state?: string; tracking?: string };
+  fulfillment?: {
+    type?: string;
+    state?: string;
+    tracking?: boolean;
+    tracking_url?: string;
+  };
   deliveredAt?: string;
   returnInfo?: {
     reason?: string;

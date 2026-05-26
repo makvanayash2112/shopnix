@@ -52,11 +52,13 @@ export interface IOrder extends Document {
     type?: string;
     status?: string;
     amount: number;
+    collected_by?: string;
   };
   fulfillment: {
     type?: string;
     state?: string;
-    tracking?: string;
+    tracking?: boolean;
+    tracking_url?: string;
   };
   deliveredAt?: Date;
   returnInfo?: IReturnInfo;
@@ -125,7 +127,11 @@ const orderSchema = new Schema<IOrder>(
         type: String,
         default: "Pending",
       },
-      tracking: String,
+      tracking: {
+        type: Boolean,
+        default: false,
+      },
+      tracking_url: String,
     },
     deliveredAt: Date,
     returnInfo: {

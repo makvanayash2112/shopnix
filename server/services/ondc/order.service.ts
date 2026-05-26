@@ -122,6 +122,8 @@ export async function createOrderFromInit(
       status: "NOT-PAID",
 
       type: "ON-FULFILLMENT",
+
+      collected_by: "BPP",
     },
 
     // cancellation_terms: [],
