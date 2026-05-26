@@ -17,6 +17,7 @@ export interface Seller {
   storeName: string;
   storeDescription?: string;
   gstin?: string;
+  pan?: string;
   email: string;
   phone?: string;
   address?: {
@@ -58,6 +59,7 @@ export interface OndcReadiness {
 
 export interface Product {
   _id: string;
+  sellerId?: string | Seller;
   name: string;
   description?: string;
   category: string;

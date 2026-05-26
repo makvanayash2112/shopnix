@@ -4,15 +4,13 @@ import { User } from "../models/User";
 
 const SUPERADMIN_EMAIL = (
   process.env.SUPERADMIN_EMAIL ||
-  process.env.ADMIN_EMAIL ||
-  "admin@shopnix.com"
+  "superadmin@shopnix.com"
 ).toLowerCase();
 const SUPERADMIN_PASSWORD =
   process.env.SUPERADMIN_PASSWORD ||
-  process.env.ADMIN_PASSWORD ||
   "Shopnix@Admin2026";
 const SUPERADMIN_NAME =
-  process.env.SUPERADMIN_NAME || process.env.ADMIN_NAME || "Shopnix Superadmin";
+  process.env.SUPERADMIN_NAME || "Shopnix Superadmin";
 
 async function seedSuperadmin() {
   await connectDatabase();

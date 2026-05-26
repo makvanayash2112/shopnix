@@ -1,6 +1,12 @@
 import mongoose from "mongoose";
+import dotenv from "dotenv";
+import path from "path";
 import { ensureProductIndexes } from "../lib/ensure-indexes";
 import { Seller } from "../models/Seller";
+
+if (!process.env.VERCEL) {
+  dotenv.config({ path: path.resolve(process.cwd(), ".env") });
+}
 
 interface MongooseCache {
   conn: typeof mongoose | null;

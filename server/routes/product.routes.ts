@@ -1,6 +1,10 @@
 import { Router } from "express";
 import { Product } from "../models/Product";
-import { requireAuth, type AuthRequest } from "../middleware/auth";
+import {
+  requireAuth,
+  requireSuperAdmin,
+  type AuthRequest,
+} from "../middleware/auth";
 import { productUpload } from "../middleware/upload";
 import {
   saveProductImage,
@@ -53,6 +57,21 @@ router.get("/", async (req: AuthRequest, res) => {
   const products = await Product.find({ sellerId }).sort({ createdAt: -1 });
   return sendSuccess(res, products);
 });
+
+router.get(
+  "/all",
+  requireSuperAdmin,
+  async (_req: AuthRequest, res) => {
+    const products = await Product.find()
+      .populate(
+        "sellerId",
+        "storeName email phone gstin pan ondcProviderId ondc.isActive"
+      )
+      .sort({ createdAt: -1 });
+
+    return sendSuccess(res, products);
+  }
+);
 
 router.get("/:id", async (req: AuthRequest, res) => {
   const product = await Product.findOne({

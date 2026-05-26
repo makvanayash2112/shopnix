@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Shopnix — ONDC Seller App",
-  description: "E-commerce seller admin with ONDC BPP integration",
+  description: "ONDC seller app with superadmin marketplace visibility",
 };
 
 export default function RootLayout({

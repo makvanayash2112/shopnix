@@ -1,5 +1,13 @@
 import { Product } from "../../models/Product";
 import { Seller } from "../../models/Seller";
+import {
+  GSTIN_PATTERN,
+  INDIAN_PHONE_PATTERN,
+  INDIAN_PINCODE_PATTERN,
+  PAN_PATTERN,
+  normalizePhone,
+  normalizeTaxId,
+} from "../../lib/seller-validation";
 
 type ProviderIdSource = {
   _id: { toString(): string };
@@ -31,6 +39,14 @@ export async function getSellerOndcReadiness(sellerId: string) {
     quantity: { $gt: 0 },
   }).select("images");
 
+  const gstin = normalizeTaxId(seller.gstin);
+  const pan = normalizeTaxId(seller.pan);
+  const phone = seller.phone ? normalizePhone(seller.phone) : "";
+  const pincode = seller.address?.pincode?.trim() ?? "";
+  const hasValidTaxId = Boolean(
+    (gstin && GSTIN_PATTERN.test(gstin)) || (pan && PAN_PATTERN.test(pan))
+  );
+
   const withRealImages = publishedProducts.filter((p) =>
     (p.images ?? []).some(
       (image) =>
@@ -49,36 +65,37 @@ export async function getSellerOndcReadiness(sellerId: string) {
     {
       id: "phone",
       label: "Phone number",
-      ok: Boolean(seller.phone?.trim()),
+      ok: INDIAN_PHONE_PATTERN.test(phone),
       hint: "Required for fulfillment contact on ONDC",
     },
     {
       id: "address",
       label: "Address (street, city, state, pincode)",
       ok: Boolean(
-        seller.address?.city &&
+        seller.address?.street &&
+          seller.address?.city &&
           seller.address?.state &&
-          seller.address?.pincode
+          INDIAN_PINCODE_PATTERN.test(pincode)
       ),
       hint: "Used for provider location on ONDC catalog",
     },
     {
-      id: "gstin",
-      label: "GSTIN (recommended)",
-      ok: Boolean(seller.gstin?.trim()),
-      hint: "Often required for retail seller NP on portal",
+      id: "tax_id",
+      label: "GSTIN or PAN",
+      ok: hasValidTaxId,
+      hint: "GSTIN must be 15 characters; PAN must be 10 characters",
     },
     {
       id: "ondc_active",
       label: "Listed on ONDC network",
       ok: seller.ondc?.isActive !== false,
-      hint: "Toggle in seller profile if you add UI; default true on register",
+      hint: "Enabled when the seller is allowed to appear in ONDC search",
     },
     {
       id: "published_products",
       label: "At least 1 published product in stock",
       ok: publishedCount > 0,
-      hint: "Publish products with quantity > 0 in Admin → Products",
+      hint: "Publish products with quantity above 0 in Seller Products",
     },
     {
       id: "product_images",
@@ -91,13 +108,11 @@ export async function getSellerOndcReadiness(sellerId: string) {
       id: "provider_id",
       label: "ONDC provider ID assigned",
       ok: Boolean(seller.ondcProviderId),
-      hint: "Auto-set on registration; shown in ONDC admin",
+      hint: "Auto-set on registration; shown in ONDC settings",
     },
   ];
 
-  const ready = checks.every((c) =>
-    c.id === "gstin" ? true : c.ok
-  );
+  const ready = checks.every((c) => c.ok);
 
   return {
     ready,
@@ -106,13 +121,11 @@ export async function getSellerOndcReadiness(sellerId: string) {
     publishedCount,
     checks,
     networkNote:
-      "Your products appear on ONDC when published. Shopnix BPP (shopnix-nine.vercel.app) aggregates all active sellers for search/on_search.",
+      "Seller products appear on ONDC when the seller is active and products are published with stock.",
   };
 }
 
-export function assignOndcProviderId(
-  seller: ProviderIdSource
-): string {
+export function assignOndcProviderId(seller: ProviderIdSource): string {
   const base = seller.storeName
     .toUpperCase()
     .replace(/[^A-Z0-9]/g, "_")

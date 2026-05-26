@@ -57,14 +57,21 @@ export default function RegisterPage() {
           Create seller account
         </h1>
         <p className="mt-1 text-sm text-slate-500">
-          Sets up your store and ONDC MSN provider profile
+          Sets up your store and ONDC MSN provider profile.
         </p>
 
         <form onSubmit={onSubmit} className="mt-8 grid gap-4 sm:grid-cols-2">
           <Input label="Your name" name="name" required />
           <Input label="Store name" name="storeName" required />
           <Input label="Email" name="email" type="email" required />
-          <Input label="Phone" name="phone" required />
+          <Input
+            label="Phone"
+            name="phone"
+            inputMode="numeric"
+            pattern="[6-9][0-9]{9}"
+            title="Enter a valid 10 digit Indian mobile number"
+            required
+          />
           <Input
             label="Password"
             name="password"
@@ -72,14 +79,32 @@ export default function RegisterPage() {
             required
             minLength={6}
           />
-          <Input label="GSTIN" name="gstin" />
-          <Input label="PAN" name="pan" />
+          <Input
+            label="GSTIN"
+            name="gstin"
+            pattern="[0-9]{2}[A-Za-z]{5}[0-9]{4}[A-Za-z][1-9A-Za-z]Z[0-9A-Za-z]"
+            title="Enter a valid 15 character GSTIN"
+          />
+          <Input
+            label="PAN"
+            name="pan"
+            pattern="[A-Za-z]{5}[0-9]{4}[A-Za-z]"
+            title="Enter a valid 10 character PAN"
+          />
           <Input label="Street address" name="street" required />
           <Input label="City" name="city" required />
           <Input label="State" name="state" required />
-          <Input label="Pincode" name="pincode" required />
+          <Input
+            label="Pincode"
+            name="pincode"
+            inputMode="numeric"
+            pattern="[1-9][0-9]{5}"
+            title="Enter a valid 6 digit Indian pincode"
+            required
+          />
           <p className="text-xs text-slate-500 sm:col-span-2">
-            GSTIN or PAN is required for seller onboarding.
+            GSTIN or PAN is required. If both are entered, the PAN must match
+            the GSTIN.
           </p>
           {error && (
             <p className="text-sm text-red-600 sm:col-span-2">{error}</p>

@@ -5,6 +5,7 @@ import {
   type BecknContext,
 } from "../utils/beckn";
 import { logOndcBppIncoming } from "../middleware/ondc-bpp";
+import { requireAuth, type AuthRequest } from "../middleware/auth";
 import { postToBap } from "../services/ondc/callback.service";
 import { logOndcBpp, deriveSigningPublicKey } from "../utils/ondc-debug";
 import { isPreprodTrustSearchEnabled } from "../utils/ondc-preprod-trust";
@@ -235,7 +236,7 @@ router.post("/search", async (req, res) => {
 
     if (entries.length === 0 || totalProducts === 0) {
       logOndcBpp(
-        "search abort: no published products — sellers must register + publish in admin"
+        "search abort: no published products — sellers must register and publish products"
       );
       return;
     }
@@ -549,13 +550,35 @@ router.post("/support", async (req, res) => {
   }
 });
 
-/** Admin: view ONDC transaction logs */
-router.get("/logs", async (req, res) => {
+/** Superadmin sees all logs; sellers see logs related to their provider/items. */
+router.get("/logs", requireAuth, async (req: AuthRequest, res) => {
   const limit = Math.min(Number(req.query.limit) || 50, 200);
   const logs = await OndcLog.find()
     .sort({ createdAt: -1 })
     .limit(limit);
-  res.json({ success: true, data: logs });
+
+  if (req.user?.role === "superadmin") {
+    return res.json({ success: true, data: logs });
+  }
+
+  const sellerId = req.user?.sellerId;
+  if (!sellerId) {
+    return res.json({ success: true, data: [] });
+  }
+
+  const seller = await Seller.findById(sellerId);
+  const products = await Product.find({ sellerId }).select("ondcItemId");
+  const needles = [
+    seller?.ondcProviderId,
+    ...products.map((product) => product.ondcItemId),
+  ].filter(Boolean) as string[];
+
+  const sellerLogs = logs.filter((log) => {
+    const payload = JSON.stringify(log.payload);
+    return needles.some((needle) => payload.includes(needle));
+  });
+
+  return res.json({ success: true, data: sellerLogs });
 });
 
 export default router;

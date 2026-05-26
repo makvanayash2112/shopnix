@@ -38,17 +38,6 @@ export async function requireAuth(
   }
 }
 
-export function requireAdmin(
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-) {
-  if (!req.user || !["superadmin", "seller"].includes(req.user.role)) {
-    return sendError(res, "Seller access required", 403);
-  }
-  next();
-}
-
 export function requireSuperAdmin(
   req: AuthRequest,
   res: Response,

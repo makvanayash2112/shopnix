@@ -8,6 +8,12 @@ import { Seller } from "../models/Seller";
 import { sendError, sendSuccess } from "../utils/response";
 import { assignOndcProviderId } from "../services/ondc/seller-readiness.service";
 import { requireAuth, type AuthRequest } from "../middleware/auth";
+import {
+  normalizeEmail,
+  normalizePhone,
+  normalizeTaxId,
+  validateSellerIdentity,
+} from "../lib/seller-validation";
 
 const router = Router();
 
@@ -51,10 +57,21 @@ router.post("/register", async (req, res) => {
       );
     }
 
-    const normalizedEmail = email.toLowerCase();
-    const normalizedPhone = phone.replace(/\s+/g, "");
-    const normalizedGstin = req.body.gstin?.trim().toUpperCase();
-    const normalizedPan = req.body.pan?.trim().toUpperCase();
+    const normalizedEmail = normalizeEmail(email);
+    const normalizedPhone = normalizePhone(phone);
+    const normalizedGstin = normalizeTaxId(req.body.gstin);
+    const normalizedPan = normalizeTaxId(req.body.pan);
+    const validationError = validateSellerIdentity({
+      email: normalizedEmail,
+      phone: normalizedPhone,
+      gstin: normalizedGstin,
+      pan: normalizedPan,
+      pincode: address.pincode.trim(),
+    });
+
+    if (validationError) {
+      return sendError(res, validationError, 400);
+    }
 
     const [existingUser, existingSellerEmail, existingSellerPhone, existingSellerGstin, existingSellerPan] =
       await Promise.all([

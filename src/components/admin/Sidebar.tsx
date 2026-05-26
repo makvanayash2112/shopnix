@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clearToken } from "@/lib/api";
+import type { User } from "@/types";
 
-const links = [
+const sellerLinks = [
   { href: "/admin", label: "Dashboard", icon: "D" },
   { href: "/admin/products", label: "Products", icon: "P" },
   { href: "/admin/orders", label: "Orders", icon: "O" },
@@ -12,8 +13,16 @@ const links = [
   { href: "/admin/ondc", label: "ONDC", icon: "N" },
 ];
 
-export function Sidebar() {
+const superadminLinks = [
+  { href: "/admin", label: "Overview", icon: "O" },
+  { href: "/admin/sellers", label: "All sellers", icon: "S" },
+  { href: "/admin/all-products", label: "All products", icon: "P" },
+];
+
+export function Sidebar({ user }: { user: User | null }) {
   const pathname = usePathname() ?? "";
+  const isSuperadmin = user?.role === "superadmin";
+  const links = user ? (isSuperadmin ? superadminLinks : sellerLinks) : [];
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-slate-200 bg-slate-950 text-slate-100">
@@ -21,8 +30,10 @@ export function Sidebar() {
         <p className="text-xs uppercase tracking-widest text-emerald-400">
           Shopnix
         </p>
-        <h1 className="mt-1 text-lg font-bold">Seller Admin</h1>
-        <p className="text-xs text-slate-400">ONDC MSN Console</p>
+        <h1 className="mt-1 text-lg font-bold">
+          {user ? (isSuperadmin ? "Superadmin Console" : "Seller Console") : "Shopnix Console"}
+        </h1>
+        <p className="text-xs text-slate-400">ONDC MSN</p>
       </div>
 
       <nav className="flex-1 space-y-1 p-3">

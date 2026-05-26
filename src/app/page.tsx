@@ -14,7 +14,7 @@ export default function HomePage() {
         <div className="flex flex-wrap gap-3">
           <Link href="/login">
             <Button variant="ghost" className="text-white hover:bg-white/10">
-              Seller login
+              Sign in
             </Button>
           </Link>
           <Link href="/register">
@@ -28,15 +28,17 @@ export default function HomePage() {
       <main className="mx-auto max-w-6xl px-6 py-16">
         <div className="max-w-2xl">
           <h2 className="text-4xl font-bold leading-tight sm:text-5xl">
-            Sell on ONDC — automated product sync & order management
+            Sell on ONDC with automated product sync and order management
           </h2>
           <p className="mt-6 text-lg text-slate-300">
-            Join the ONDC Marketplace as a Seller Node (MSN). Create your seller account, add products, and automatically list them across the ONDC network. Your inventory is exposed through the seller BPP with Cash on Delivery support.
+            Create a seller account, add products, and list them through the
+            Shopnix MSN catalog. Superadmin can review all sellers and all
+            products, while sellers manage only their own store.
           </p>
           <div className="mt-10 flex flex-wrap gap-4">
             <Link href="/admin">
               <Button className="bg-emerald-500 px-6 py-3 text-base hover:bg-emerald-600">
-                Go to seller dashboard
+                Open dashboard
               </Button>
             </Link>
             <Link href="/register">
@@ -50,28 +52,30 @@ export default function HomePage() {
         <div className="mt-20 grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[
             {
-              title: "Seller dashboard",
-              desc: "Manage products, orders, and store profile. Track ONDC MSN listings in real-time.",
+              title: "Seller workspace",
+              desc: "Manage products, orders, store profile, and ONDC listing readiness.",
               href: "/admin",
             },
             {
               title: "Product catalog",
-              desc: "Add, edit, and publish products to ONDC network. Sync inventory automatically.",
+              desc: "Add, edit, and publish products to the ONDC network.",
               href: "/admin/products",
             },
             {
               title: "Order management",
-              desc: "View and manage ONDC orders. Complete fulfillment workflows.",
+              desc: "View ONDC orders and complete fulfillment workflows.",
               href: "/admin/orders",
             },
-          ].map((f) => (
+          ].map((feature) => (
             <Link
-              key={f.title}
-              href={f.href}
+              key={feature.title}
+              href={feature.href}
               className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur transition hover:bg-white/10"
             >
-              <h3 className="font-semibold text-emerald-300">{f.title}</h3>
-              <p className="mt-2 text-sm text-slate-400">{f.desc}</p>
+              <h3 className="font-semibold text-emerald-300">
+                {feature.title}
+              </h3>
+              <p className="mt-2 text-sm text-slate-400">{feature.desc}</p>
             </Link>
           ))}
         </div>

@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { apiFetch, API_URL } from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/Button";
 import { Input } from "@/components/ui/Input";
 import { Card } from "@/components/ui/Card";
@@ -43,14 +43,8 @@ export default function OndcPage() {
 
   useEffect(() => {
     apiFetch<Seller>("/seller/profile").then(setSeller).catch(console.error);
-    fetch(`${API_URL || ""}/api/ondc/guide`)
-      .then((r) => r.json())
-      .then((j) => setGuide(j.data))
-      .catch(console.error);
-    fetch(`${API_URL || ""}/api/ondc/logs`)
-      .then((r) => r.json())
-      .then((j) => setLogs(j.data || []))
-      .catch(console.error);
+    apiFetch<NetworkGuide>("/ondc/guide").then(setGuide).catch(console.error);
+    apiFetch<OndcLog[]>("/ondc/logs").then(setLogs).catch(console.error);
   }, []);
 
   async function saveOndc(e: React.FormEvent<HTMLFormElement>) {
@@ -158,8 +152,8 @@ export default function OndcPage() {
             </a>
           </div>
           <p className="mt-4 rounded-lg bg-amber-50 p-3 text-sm text-amber-900">
-            Register only <code>/ondc</code> in the ONDC portal for this
-            seller-node project.
+            Register only <code>/ondc</code> in the ONDC portal for this seller
+            app.
           </p>
         </Card>
       )}

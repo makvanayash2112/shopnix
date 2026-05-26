@@ -41,7 +41,5 @@ export const env = {
     uniqueKeyId: process.env.ONDC_UNIQUE_KEY_ID || "",
 
   },
-  defaultStoreName: process.env.DEFAULT_STORE_NAME || "Shopnix Store",
-  defaultStoreGstin: process.env.DEFAULT_STORE_GSTIN || "",
-  defaultStoreEmail: process.env.DEFAULT_STORE_EMAIL || "admin@shopnix.local",
+  defaultStoreName: process.env.DEFAULT_STORE_NAME || "Shopnix Marketplace",
 };
