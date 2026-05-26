@@ -98,25 +98,34 @@ export async function createOrderFromInit(
     //   status: "NOT-PAID",
     //   type: "ON-FULFILLMENT",
     // },
+    // payment: {
+    //   type:
+    //     order.payment?.type || "ON-ORDER",
+
+    //   status:
+    //     order.payment?.status || "NOT-PAID",
+
+    //   collected_by: "BPP",
+
+    //   params: {
+    //     amount: String(order.payment?.amount ?? 0),
+
+    //     currency: "INR",
+    //   },
+    // },
+
     payment: {
-      type:
-        order.payment?.type || "ON-ORDER",
+      method: "cash",
 
-      status:
-        order.payment?.status || "NOT-PAID",
+      amount,
 
-      collected_by: "BPP",
+      status: "NOT-PAID",
 
-      params: {
-        amount: String(order.payment?.amount ?? 0),
-
-        currency: "INR",
-      },
+      type: "ON-FULFILLMENT",
     },
 
-    cancellation_terms: [],
-
-    tags: [],
+    // cancellation_terms: [],
+    // tags: [],
     fulfillment: { type: "Delivery", state: "Pending" },
     // becknContext: {
     //   ...(context as unknown as Record<string, unknown>),
