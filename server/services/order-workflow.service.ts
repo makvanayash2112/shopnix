@@ -23,11 +23,12 @@ export function applyStatusUpdate(order: IOrder, nextStatus: OrderStatus) {
   if (nextStatus === "Delivering") {
     order.fulfillment.state = "Out-for-delivery";
 
-    order.fulfillment.tracking = true;
+    order.fulfillment.tracking = false;
+    order.fulfillment.tracking_url = `https://shopnix-nine.vercel.app/track/${order.orderId}`;
 
     // order.fulfillment.tracking_url =
     //   order.fulfillment.tracking_url ||
-    //   `https://shopnix-nine.vercel.app/track/${order.orderId}`;
+    //   `https://shopnix-nine.vercel.app/track/${order.orderId}`; 
   }
   if (nextStatus === "Delivered") {
     order.fulfillment.state = "Delivered";

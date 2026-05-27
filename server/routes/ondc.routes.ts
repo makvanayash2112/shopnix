@@ -167,23 +167,6 @@ router.get("/test-catalog", async (req, res) => {
 /** Beckn POST — signature + context validation */
 router.use(logOndcBppIncoming);
 
-/** Beckn POST routes require valid context in JSON body */
-
-// router.post("/search", async (req, res) => {
-//   const body = req.body as BecknBody;
-//   try {
-//     const { seller, products } = await getPublishedCatalog();
-//     if (seller) {
-//       const context = replyContext(body.context, "on_search");
-//       const message = buildCatalogMessage(seller, products, env.apiBaseUrl);
-//       await postToBap(context, "on_search", message);
-//     }
-//   } catch (err) {
-//     console.error("[search] Error:", err);
-//   }
-//   ack(res);
-// });
-
 router.post("/search", async (req, res) => {
   const body = req.body as BecknBody;
 

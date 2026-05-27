@@ -52,7 +52,8 @@ export function replyContext(
   return {
     domain: incoming.domain || env.ondc.domain,
     country: incoming.country || env.ondc.country,
-    city: incoming.city || env.ondc.city,
+    city: incoming.city || env.ondc.city || "std:0281",
+
     action,
     core_version: incoming.core_version || "1.2.0",
     bap_id: incoming.bap_id,
