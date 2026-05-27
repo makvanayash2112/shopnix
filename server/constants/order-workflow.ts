@@ -17,8 +17,8 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const SELLER_STATUS_FLOW: Record<string, OrderStatus[]> = {
   Created: ["Accepted", "Cancelled"],
   Accepted: ["Packed", "Cancelled"],
-  Packed: ["Agent-assigned", "Cancelled"],
-  "Agent-assigned": ["Order-picked-up", "Cancelled"],
+  Packed: ["Agent-assigned", "Delivering", "Cancelled"],
+  "Agent-assigned": ["Order-picked-up", "Delivering", "Cancelled"],
   "Order-picked-up": ["Delivering", "Cancelled"],
   Delivering: ["Delivered"],
   Delivered: [],
