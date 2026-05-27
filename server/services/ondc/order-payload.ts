@@ -30,29 +30,29 @@ function resolveCustomerContact(order: IOrder) {
   };
 }
 
-function normalizeBecknOrderState(state?: string): string {
-  switch (state) {
-    case "Created":
-      return "Created";
-    case "Accepted":
-      return "Accepted";
-    case "In-progress":
-    case "Packed":
-    case "Agent-assigned":
-    case "Order-picked-up":
-    case "Delivering":
-      return "In-progress";
-    case "Delivered":
-    case "Completed":
-      return "Completed";
-    case "Cancelled":
-      return "Cancelled";
+function normalizeBecknOrderState(status?: string, fulfillmentState?: string): string {
+  const fState = fulfillmentState || "Pending";
+  if (
+    fState === "Packed" ||
+    fState === "Agent-assigned" ||
+    fState === "Order-picked-up" ||
+    fState === "Out-for-delivery" ||
+    fState === "Delivering"
+  ) {
+    return "In-progress";
+  }
+  if (fState === "Order-delivered") {
+    return "Completed";
+  }
+  switch (status) {
+    case "Created": return "Created";
+    case "Accepted": return "Accepted";
+    case "In-progress": return "In-progress";
+    case "Completed": return "Completed";
+    case "Cancelled": return "Cancelled";
     case "Return-Requested":
-    case "Return-Approved":
-    case "Returned":
-      return "Accepted";
-    default:
-      return "Created";
+    case "Return-Approved": return "Completed";
+    default: return "Created";
   }
 }
 
@@ -224,13 +224,23 @@ export function buildOrderMessage(order: IOrder) {
   const paymentType = order.payment?.type || "ON-FULFILLMENT";
   const paymentStatus = order.payment?.status || "NOT-PAID";
   const taxNumber = resolveTaxNumber(order);
-  const createdAt = order.createdAt?.toISOString?.() || new Date().toISOString();
-  const updatedAtOrder = order.updatedAt?.toISOString?.() || createdAt;
+  const billingCreatedAt = typeof order.becknContext?.billing_created_at === "string" 
+    ? order.becknContext.billing_created_at : (order.createdAt?.toISOString?.() || new Date().toISOString());
+  const billingUpdatedAt = typeof order.becknContext?.billing_updated_at === "string" 
+    ? order.becknContext.billing_updated_at : billingCreatedAt;
+
+  const orderCreatedAt = typeof order.becknContext?.confirm_order_created_at === "string" 
+    ? order.becknContext.confirm_order_created_at 
+    : (typeof order.becknContext?.init_order_created_at === "string" ? order.becknContext.init_order_created_at : billingCreatedAt);
+    
+  const orderUpdatedAt = typeof order.becknContext?.confirm_order_updated_at === "string" 
+    ? order.becknContext.confirm_order_updated_at 
+    : (typeof order.becknContext?.init_order_updated_at === "string" ? order.becknContext.init_order_updated_at : billingUpdatedAt);
 
   return {
     order: {
       id: order.orderId,
-      state: normalizeBecknOrderState(order.status),
+      state: normalizeBecknOrderState(order.status, order.fulfillment?.state),
       provider: {
         id: resolvedProviderId,
         locations: [{ id: locationId }],
@@ -254,18 +264,25 @@ export function buildOrderMessage(order: IOrder) {
         email: contact.email,
         address,
         tax_number: taxNumber,
-        created_at: createdAt,
-        updated_at: updatedAtOrder,
+        created_at: billingCreatedAt,
+        updated_at: billingUpdatedAt,
       },
       cancellation_terms: [
         {
-          fulfillment_state: "Pending",
+          fulfillment_state: {
+            descriptor: {
+              code: "Pending",
+              short_desc: "Pending"
+            }
+          },
+          refund_eligible: true,
           reason_required: false,
           cancellation_fee: {
             amount: {
               currency: "INR",
               value: "0"
-            }
+            },
+            percentage: "0"
           }
         }
       ],
@@ -278,8 +295,8 @@ export function buildOrderMessage(order: IOrder) {
           ],
         },
       ],
-      created_at: createdAt,
-      updated_at: updatedAtOrder,
+      created_at: orderCreatedAt,
+      updated_at: orderUpdatedAt,
       fulfillments: [
         {
           id: "F1",
@@ -298,10 +315,10 @@ export function buildOrderMessage(order: IOrder) {
               name: sellerContact.name,
             },
             time: {
-              timestamp: createdAt,
+              timestamp: orderCreatedAt,
               range: {
-                start: createdAt,
-                end: createdAt,
+                start: orderCreatedAt,
+                end: orderCreatedAt,
               },
             },
             location: {
@@ -323,10 +340,10 @@ export function buildOrderMessage(order: IOrder) {
               name: contact.name,
             },
             time: {
-              timestamp: createdAt,
+              timestamp: orderCreatedAt,
               range: {
-                start: createdAt,
-                end: createdAt,
+                start: orderCreatedAt,
+                end: orderCreatedAt,
               },
             },
             location: {

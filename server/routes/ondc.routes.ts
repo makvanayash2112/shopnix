@@ -366,6 +366,19 @@ router.post("/init", async (req, res) => {
       orderMsg?.provider?.id
     );
 
+    const msgOrder = body.message?.order as any;
+    if (msgOrder) {
+      order.becknContext = {
+        ...(order.becknContext || {}),
+        billing_created_at: msgOrder.billing?.created_at,
+        billing_updated_at: msgOrder.billing?.updated_at,
+        init_order_created_at: msgOrder.created_at,
+        init_order_updated_at: msgOrder.updated_at,
+      };
+      order.markModified("becknContext");
+      await order.save();
+    }
+
     const context = replyContext(
       body.context,
       "on_init"
@@ -405,6 +418,16 @@ router.post("/confirm", async (req, res) => {
     order.bapOrderId =
       (body.message?.order as { id?: string })
         ?.id;
+
+    const msgOrder = body.message?.order as any;
+    if (msgOrder) {
+      order.becknContext = {
+        ...(order.becknContext || {}),
+        confirm_order_created_at: msgOrder.created_at,
+        confirm_order_updated_at: msgOrder.updated_at,
+      };
+      order.markModified("becknContext");
+    }
 
     await order.save();
 
