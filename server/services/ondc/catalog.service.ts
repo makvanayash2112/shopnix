@@ -36,30 +36,32 @@ export function filterProductsForOndcSearch(
 }
 
 function defaultItemCode(product: IProduct): string {
-  const digits = product.sku.replace(/\D/g, "").slice(0, 13);
-  const ean = digits.padStart(13, "0").slice(0, 13);
-  return `EAN:${ean || "8901030895657"}`;
+  const seed = (product.ondcItemId || product.sku || product.name)
+    .replace(/[^a-zA-Z0-9]/g, "")
+    .slice(0, 24);
+  return `5:${seed || "item"}`;
 }
 
 function defaultGps(seller: ISeller): string {
   const pin = seller.address?.pincode || "";
-  if (pin.startsWith("56")) return "12.9716,77.5946";
-  if (pin.startsWith("11")) return "28.6139,77.2090";
-  if (pin.startsWith("40") || pin.startsWith("41")) return "19.0760,72.8777";
-  return "12.9716,77.5946";
+  if (pin.startsWith("56")) return "12.971599,77.594566";
+  if (pin.startsWith("11")) return "28.613939,77.209021";
+  if (pin.startsWith("40") || pin.startsWith("41")) return "19.076090,72.877426";
+  return "12.971599,77.594566";
 }
 
 function itemDescriptor(
   product: IProduct,
   baseUrl: string,
-  locationId: string
+  locationId: string,
+  seller: ISeller
 ) {
   const { categoryId } = mapOndcCategory(product.categorySlug);
   const imageUrls = (product.images.length
     ? product.images
     : [ondcFallbackImageUrl(product.ondcItemId)]
   ).map((url) => resolvePublicImageUrl(url, baseUrl, product.ondcItemId));
-  const images = imageUrls.map((url) => ({ url }));
+  const images = imageUrls;
   const unit = normalizeOndcUnit(product.unit);
   const shortDesc =
     product.description?.slice(0, 120) || product.name;
@@ -76,7 +78,15 @@ function itemDescriptor(
       long_desc: longDesc,
       code: defaultItemCode(product),
       images,
-      symbol: images[0]?.url,
+      symbol: images[0],
+    },
+    time: {
+      label: "enable",
+      timestamp: new Date().toISOString(),
+      range: {
+        start: new Date().toISOString(),
+        end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+      },
     },
     price: {
       currency: "INR",
@@ -86,6 +96,8 @@ function itemDescriptor(
     category_id: categoryId,
     fulfillment_ids: ["F1"],
     location_ids: [locationId],
+    fulfillment_id: "F1",
+    location_id: locationId,
     quantity: {
       available: { count: ondcAvailableCount(product.quantity) },
       maximum: { count: "10" },
@@ -98,6 +110,15 @@ function itemDescriptor(
     "@ondc/org/return_window": "P7D",
     "@ondc/org/available_on_cod": true,
     "@ondc/org/time_to_ship": "PT24H",
+    "@ondc/org/seller_pickup_return": false,
+    "@ondc/org/contact_details_consumer_care":
+      `${seller.storeName} consumer care`,
+    "@ondc/org/statutory_reqs_packaged_commodities": {
+      manufacturer_or_packer_name: product.brand || "Shopnix Seller",
+      manufacturer_or_packer_address: "India",
+      common_or_generic_name_of_commodity: product.name,
+      month_year_of_manufacture_packing_import: new Date().toISOString().slice(0, 7),
+    },
     tags: [
       {
         code: "origin",
@@ -142,25 +163,39 @@ function buildProviderBlock(
       name: seller.storeName,
       short_desc: providerShort,
       long_desc: providerLong,
+      symbol: ondcFallbackImageUrl(seller.storeName),
+      images: [ondcFallbackImageUrl(seller.storeName)],
     },
+    ttl: "P30D",
     locations: [
       {
         id: locationId,
         descriptor: { name: seller.storeName },
         gps: defaultGps(seller),
         address: {
+          street: seller.address?.street || seller.storeName,
           locality: seller.address?.street || "Main Street",
           city: seller.address?.city || "Bengaluru",
           state: seller.address?.state || "KA",
+          country: seller.address?.country || "IND",
           area_code: seller.address?.pincode || "560001",
         },
         time: {
           label: "enable",
           timestamp: new Date().toISOString(),
+          days: "Mon-Sun",
+          schedule: {
+            holidays: [],
+            frequency: "P1D",
+            times: ["00:00-23:59"],
+          },
+          range: {
+            start: new Date().toISOString(),
+            end: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString(),
+          },
         },
       },
     ],
-    items: products.map((p) => itemDescriptor(p, baseUrl, locationId)),
     fulfillments: [
       {
         id: "F1",
@@ -171,6 +206,7 @@ function buildProviderBlock(
         },
       },
     ],
+    items: products.map((p) => itemDescriptor(p, baseUrl, locationId, seller)),
     tags: [
       {
         code: "serviceability",
@@ -202,11 +238,11 @@ function bppDescriptor(
     short_desc: shortDesc,
     long_desc: longDesc,
     symbol,
-    images: [{ url: symbol }],
+    images: [symbol],
     tags: [
       {
         code: "bpp_terms",
-        list: [{ code: "np_type", value: npType }],
+        list: [{ code: "np_type", value: npType === "SNP" ? "ISN" : "MSN" }],
       },
     ],
   };
