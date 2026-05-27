@@ -411,7 +411,7 @@ router.post("/confirm", async (req, res) => {
 
     order.status = "Accepted";
 
-    order.fulfillment.state = "Packed";
+    order.fulfillment.state = "Pending";
 
     order.payment.status = "PAID";
 
