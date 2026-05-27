@@ -4,6 +4,8 @@ const styles: Record<string, string> = {
   Created: "bg-amber-100 text-amber-800",
   Accepted: "bg-blue-100 text-blue-800",
   Packed: "bg-indigo-100 text-indigo-800",
+  "Agent-assigned": "bg-indigo-100 text-indigo-800",
+  "Order-picked-up": "bg-violet-100 text-violet-800",
   Delivering: "bg-violet-100 text-violet-800",
   Delivered: "bg-emerald-100 text-emerald-800",
   Cancelled: "bg-red-100 text-red-800",

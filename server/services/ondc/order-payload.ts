@@ -269,7 +269,7 @@ export function buildOrderMessage(order: IOrder) {
         },
       ],
       created_at: createdAt,
-      updated_at: updatedAtOrder,
+      updated_at: createdAt,
       fulfillments: [
         {
           id: "F1",
@@ -291,7 +291,7 @@ export function buildOrderMessage(order: IOrder) {
               timestamp: createdAt,
               range: {
                 start: createdAt,
-                end: updatedAtOrder,
+                end: createdAt,
               },
             },
             location: {
@@ -313,10 +313,10 @@ export function buildOrderMessage(order: IOrder) {
               name: contact.name,
             },
             time: {
-              timestamp: updatedAtOrder,
+              timestamp: createdAt,
               range: {
                 start: createdAt,
-                end: updatedAtOrder,
+                end: createdAt,
               },
             },
             location: {

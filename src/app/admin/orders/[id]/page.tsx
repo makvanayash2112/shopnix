@@ -19,6 +19,16 @@ const SELLER_ACTIONS: Record<string, { status: string; label: string; variant?: 
     { status: "Cancelled", label: "Cancel order", variant: "danger" },
   ],
   Packed: [
+    { status: "Agent-assigned", label: "Assign delivery agent" },
+    { status: "Delivering", label: "Out for delivery (skip)" },
+    { status: "Cancelled", label: "Cancel order", variant: "danger" },
+  ],
+  "Agent-assigned": [
+    { status: "Order-picked-up", label: "Mark as picked up" },
+    { status: "Delivering", label: "Out for delivery (skip)" },
+    { status: "Cancelled", label: "Cancel order", variant: "danger" },
+  ],
+  "Order-picked-up": [
     { status: "Delivering", label: "Out for delivery" },
     { status: "Cancelled", label: "Cancel order", variant: "danger" },
   ],
@@ -31,7 +41,8 @@ const SELLER_ACTIONS: Record<string, { status: string; label: string; variant?: 
     { status: "Returned", label: "Complete return & restock" },
   ],
   "In-progress": [
-    { status: "Delivering", label: "Out for delivery" },
+    { status: "Agent-assigned", label: "Assign delivery agent" },
+    { status: "Delivering", label: "Out for delivery (skip)" },
     { status: "Cancelled", label: "Cancel", variant: "danger" },
   ],
 };
@@ -161,7 +172,7 @@ export default function OrderDetailPage() {
       {actions.length > 0 && (
         <Card title="Update order status">
           <p className="mb-4 text-sm text-slate-500">
-            Move order through: Confirmed → Packed → Out for delivery → Delivered
+            Move order through: Confirmed → Packed → Agent-assigned → Picked up → Out for delivery → Delivered
           </p>
           <div className="flex flex-wrap gap-2">
             {actions.map((a) => (
