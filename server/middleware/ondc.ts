@@ -21,8 +21,6 @@ export async function logOndcIncoming(
 
   try {
 
-    // HEALTH CHECK SKIP
-
     if (
       req.method === "GET" ||
       req.method === "HEAD"
@@ -32,12 +30,6 @@ export async function logOndcIncoming(
 
     console.log("========== INCOMING HEADERS ==========");
     console.log(req.headers);
-
-    // const authHeader =
-    //   req.headers.authorization || req.headers.Authorization || req.headers["x-gateway-authorization"];
-
-    // const authHeader =
-    //   req.headers.authorization as string;
 
     const authHeader =
       (req.headers.authorization ||
@@ -52,8 +44,6 @@ export async function logOndcIncoming(
         transaction_id?: string;
       };
     };
-
-    // VALIDATE BODY
 
     if (
       !body?.context?.action ||
@@ -74,8 +64,6 @@ export async function logOndcIncoming(
         );
     }
 
-    // CHECK AUTH HEADER
-
     if (!authHeader) {
 
       console.error(
@@ -91,8 +79,6 @@ export async function logOndcIncoming(
           })
         );
     }
-
-    // VERIFY SIGNATURE
 
     const rawBody =
       (req as { rawBody?: string }).rawBody ||
@@ -115,8 +101,6 @@ export async function logOndcIncoming(
           })
         );
     }
-
-    // LOG REQUEST
 
     OndcLog.create({
       action: body.context.action,

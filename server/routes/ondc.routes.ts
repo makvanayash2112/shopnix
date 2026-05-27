@@ -26,7 +26,6 @@ import { getPrimarySeller } from "../services/seller.service";
 import { Product, type IProduct } from "../models/Product";
 import { Seller } from "../models/Seller";
 import {
-  // buildOrderMessage,
   createOrderFromInit,
   findOrderByTransaction,
   reserveOrderInventory,

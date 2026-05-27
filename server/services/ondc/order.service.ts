@@ -3,7 +3,6 @@ import { Order, type IOrder, type OrderStatus } from "../../models/Order";
 import { Seller } from "../../models/Seller";
 import { Product } from "../../models/Product";
 import { resolveSellerFromOndcItemId } from "./catalog.service";
-import { buildOrderMessage } from "./order-payload";
 import type { ISeller } from "../../models/Seller";
 import type { BecknContext } from "../../utils/beckn";
 
@@ -26,7 +25,6 @@ export async function createOrderFromInit(
   let seller: ISeller | null = null;
   const orderItems = [];
 
-  // If provider ID is specified, use that seller exclusively
   if (providerId) {
     seller = await Seller.findOne({
       ondcProviderId: providerId,
@@ -56,12 +54,10 @@ export async function createOrderFromInit(
       throw new Error(`Insufficient stock for item: ${item.id}`);
     }
 
-    // If we haven't determined seller yet, use first resolved seller
     if (!seller && itemSeller) {
       seller = itemSeller;
     }
 
-    // Verify product belongs to the right seller if provider was specified
     if (providerId && product.sellerId && seller && !product.sellerId.equals(seller._id)) {
       throw new Error(`Product ${item.id} does not belong to provider ${providerId}`);
     }
