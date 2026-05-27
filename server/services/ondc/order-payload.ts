@@ -30,6 +30,22 @@ function resolveCustomerContact(order: IOrder) {
   };
 }
 
+function normalizeBecknOrderState(state?: string): string {
+  switch (state) {
+    case "Delivered":
+    case "Completed":
+      return "Completed";
+    case "Cancelled":
+      return "Cancelled";
+    case "Return-Requested":
+    case "Return-Approved":
+    case "Returned":
+      return "Completed";
+    default:
+      return "In-progress";
+  }
+}
+
 function resolveSellerContact(seller: ISeller) {
   return {
     name: seller.storeName || "Shopnix Store",
@@ -165,6 +181,11 @@ export function buildOrderMessage(order: IOrder) {
   const locationId = order.locationId || resolveLocationId(resolvedProviderId);
   const address = resolveBillingAddress(order);
   const contact = resolveCustomerContact(order);
+  const sellerContact = {
+    name: "Shopnix Store",
+    phone: "9999999999",
+    email: "support@shopnix.local",
+  };
   const timestamp = order.createdAt?.toISOString?.() || new Date().toISOString();
   const updatedAt = order.updatedAt?.toISOString?.() || timestamp;
   const paymentAmount = String(order.payment?.amount ?? 0);
@@ -174,15 +195,11 @@ export function buildOrderMessage(order: IOrder) {
   return {
     order: {
       id: order.orderId,
-      state: order.status,
-      ...(providerId
-        ? {
-            provider: {
-              id: providerId,
-              locations: [{ id: locationId }],
-            },
-          }
-        : {}),
+      state: normalizeBecknOrderState(order.status),
+      provider: {
+        id: resolvedProviderId,
+        locations: [{ id: locationId }],
+      },
       items: order.items.map((item) => ({
         id: item.ondcItemId,
         fulfillment_id: "F1",
@@ -209,6 +226,13 @@ export function buildOrderMessage(order: IOrder) {
             },
           },
           start: {
+            contact: sellerContact,
+            time: {
+              range: {
+                start: timestamp,
+                end: updatedAt,
+              },
+            },
             location: {
               id: locationId,
               gps: order.gps || "12.971599,77.594566",
