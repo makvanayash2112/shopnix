@@ -54,6 +54,14 @@ function resolveSellerContact(seller: ISeller) {
   };
 }
 
+function resolveTaxNumber(order: IOrder): string {
+  return (
+    order.customer?.address?.area_code ||
+    order.customer?.phone ||
+    "NA"
+  );
+}
+
 export function buildSelectMessage(
   seller: ISeller,
   products: IProduct[],
@@ -191,6 +199,7 @@ export function buildOrderMessage(order: IOrder) {
   const paymentAmount = String(order.payment?.amount ?? 0);
   const paymentType = order.payment?.type || "ON-FULFILLMENT";
   const paymentStatus = order.payment?.status || "NOT-PAID";
+  const taxNumber = resolveTaxNumber(order);
 
   return {
     order: {
@@ -199,6 +208,12 @@ export function buildOrderMessage(order: IOrder) {
       provider: {
         id: resolvedProviderId,
         locations: [{ id: locationId }],
+        tags: [
+          {
+            code: "selection",
+            list: [{ code: "seller_id", value: resolvedProviderId }],
+          },
+        ],
       },
       items: order.items.map((item) => ({
         id: item.ondcItemId,
@@ -212,6 +227,7 @@ export function buildOrderMessage(order: IOrder) {
         phone: contact.phone,
         email: contact.email,
         address,
+        tax_number: taxNumber,
         created_at: timestamp,
         updated_at: updatedAt,
       },
@@ -235,6 +251,9 @@ export function buildOrderMessage(order: IOrder) {
             },
             location: {
               id: locationId,
+              descriptor: {
+                name: "Store",
+              },
               gps: order.gps || "12.971599,77.594566",
               address,
             },
@@ -247,6 +266,9 @@ export function buildOrderMessage(order: IOrder) {
             },
             location: {
               id: `${locationId}-customer`,
+              descriptor: {
+                name: "Customer",
+              },
               gps: order.gps || "12.971599,77.594566",
               address,
             },
