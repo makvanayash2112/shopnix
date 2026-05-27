@@ -121,9 +121,10 @@ export async function createOrderFromInit(
 
       status: "NOT-PAID",
 
-      type: "ON-FULFILLMENT",
+      // type: "ON-FULFILLMENT",
+      type: "ON-ORDER",
 
-      collected_by: "BPP",
+      collected_by: "BAP",
     },
 
     // cancellation_terms: [],
@@ -134,7 +135,8 @@ export async function createOrderFromInit(
     //   providerId:
     //     seller.ondcProviderId || `SHOPNIX_${seller._id.toString().slice(-8)}`,
     // },
-    locationId: "L1",
+    // locationId: "L1",
+    locationId: `${seller.ondcProviderId || `SHOPNIX_${seller._id.toString().slice(-8)}`}-location`,
 
     gps:
       customer?.address?.gps ||
@@ -199,7 +201,7 @@ export function buildOrderMessage(order: IOrder) {
           id: providerId,
           locations: [
             {
-              id: order.locationId || "L1",
+              id: order.locationId,
             },
           ],
         }

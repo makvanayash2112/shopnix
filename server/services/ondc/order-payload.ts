@@ -50,7 +50,7 @@ export function buildSelectMessage(
 
         locations: [
           {
-            id: "L1",
+            id: `${seller.ondcProviderId || `SHOPNIX_${seller._id.toString().slice(-8)}`}-location`,
           },
         ],
       },
@@ -119,7 +119,7 @@ export function buildOrderMessage(order: IOrder) {
 
         locations: [
           {
-            id: order.locationId || "L1",
+            id: order.locationId,
           },
         ],
       },

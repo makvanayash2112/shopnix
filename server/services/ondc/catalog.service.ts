@@ -38,7 +38,7 @@ export function filterProductsForOndcSearch(
 function defaultItemCode(product: IProduct): string {
   const digits = product.sku.replace(/\D/g, "").slice(0, 13);
   const ean = digits.padStart(13, "0").slice(0, 13);
-  return `1:${ean || "8901030895657"}`;
+  return `EAN:${ean || "8901030895657"}`;
 }
 
 function defaultGps(seller: ISeller): string {
@@ -105,11 +105,11 @@ function itemDescriptor(
       },
       ...(product.brand
         ? [
-            {
-              code: "attribute",
-              list: [{ code: "brand", value: product.brand }],
-            },
-          ]
+          {
+            code: "attribute",
+            list: [{ code: "brand", value: product.brand }],
+          },
+        ]
         : []),
     ],
   };

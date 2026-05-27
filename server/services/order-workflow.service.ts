@@ -25,9 +25,9 @@ export function applyStatusUpdate(order: IOrder, nextStatus: OrderStatus) {
 
     order.fulfillment.tracking = true;
 
-    order.fulfillment.tracking_url =
-      order.fulfillment.tracking_url ||
-      `https://shopnix-nine.vercel.app/track/${order.orderId}`;
+    // order.fulfillment.tracking_url =
+    //   order.fulfillment.tracking_url ||
+    //   `https://shopnix-nine.vercel.app/track/${order.orderId}`;
   }
   if (nextStatus === "Delivered") {
     order.fulfillment.state = "Delivered";

@@ -54,25 +54,19 @@ export function isInvalidOndcImageUrl(url: string, baseUrl: string): boolean {
 export function resolvePublicImageUrl(
   url: string,
   baseUrl: string,
-  seed = "product"
-): string {
-  if (!url || isInvalidOndcImageUrl(url, baseUrl)) {
-    return ondcFallbackImageUrl(seed);
+  fallbackId?: string
+) {
+  if (!url) {
+    return ondcFallbackImageUrl(fallbackId);
   }
-  if (LOCAL_HOST_RE.test(url)) {
-    return ondcFallbackImageUrl(seed);
+
+  // already full URL
+  if (url.startsWith("http://") || url.startsWith("https://")) {
+    return url.replace("http://", "https://");
   }
-  if (url.startsWith("http")) return url;
-  const base = baseUrl.replace(/\/$/, "");
-  const normalized =
-    url.startsWith("/") || url.startsWith("uploads/")
-      ? url
-      : `/uploads/products/${url}`;
-  const resolved = `${base}${normalized.startsWith("/") ? normalized : `/${normalized}`}`;
-  if (isInvalidOndcImageUrl(resolved, baseUrl)) {
-    return ondcFallbackImageUrl(seed);
-  }
-  return resolved;
+
+  // relative uploads path
+  return `${baseUrl.replace(/\/$/, "")}${url.startsWith("/") ? "" : "/"}${url}`;
 }
 
 export function normalizeOndcUnit(unit?: string): string {
