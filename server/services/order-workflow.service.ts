@@ -15,6 +15,12 @@ export function applyStatusUpdate(order: IOrder, nextStatus: OrderStatus) {
   if (nextStatus === "Packed") {
     order.fulfillment.state = "Packed";
   }
+  if (nextStatus === "Agent-assigned") {
+    order.fulfillment.state = "Agent-assigned";
+  }
+  if (nextStatus === "Order-picked-up") {
+    order.fulfillment.state = "Order-picked-up";
+  }
   // if (nextStatus === "Delivering") {
   //   order.fulfillment.state = "Out-for-delivery";
   //   order.fulfillment.tracking =
@@ -31,7 +37,7 @@ export function applyStatusUpdate(order: IOrder, nextStatus: OrderStatus) {
     //   `https://shopnix-nine.vercel.app/track/${order.orderId}`; 
   }
   if (nextStatus === "Delivered") {
-    order.fulfillment.state = "Delivered";
+    order.fulfillment.state = "Order-delivered";
     order.deliveredAt = new Date();
     if (order.payment?.method === "cash") {
       order.payment.status = "PAID";

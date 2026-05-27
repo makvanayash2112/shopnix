@@ -86,6 +86,8 @@ const orderSchema = new Schema<IOrder>(
         "Created",
         "Accepted",
         "Packed",
+        "Agent-assigned",
+        "Order-picked-up",
         "Delivering",
         "Delivered",
         "Cancelled",

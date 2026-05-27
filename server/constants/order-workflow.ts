@@ -2,6 +2,8 @@ export const ORDER_STATUSES = [
   "Created",
   "Accepted",
   "Packed",
+  "Agent-assigned",
+  "Order-picked-up",
   "Delivering",
   "Delivered",
   "Cancelled",
@@ -15,12 +17,14 @@ export type OrderStatus = (typeof ORDER_STATUSES)[number];
 export const SELLER_STATUS_FLOW: Record<string, OrderStatus[]> = {
   Created: ["Accepted", "Cancelled"],
   Accepted: ["Packed", "Cancelled"],
-  Packed: ["Delivering", "Cancelled"],
+  Packed: ["Agent-assigned", "Cancelled"],
+  "Agent-assigned": ["Order-picked-up", "Cancelled"],
+  "Order-picked-up": ["Delivering", "Cancelled"],
   Delivering: ["Delivered"],
   Delivered: [],
   "Return-Requested": ["Return-Approved", "Returned"],
   "Return-Approved": ["Returned"],
-  "In-progress": ["Delivering", "Cancelled"],
+  "In-progress": ["Agent-assigned", "Cancelled"],
   Completed: [],
   Cancelled: [],
   Returned: [],
@@ -52,6 +56,8 @@ export function fulfillmentLabel(status: string): string {
     Created: "Order placed",
     Accepted: "Confirmed by seller",
     Packed: "Packed and ready to ship",
+    "Agent-assigned": "Agent-assigned",
+    "Order-picked-up": "Order-picked-up",
     Delivering: "Out for delivery",
     // Delivered: "Delivered",
     Delivered: "Order-delivered",
@@ -60,7 +66,7 @@ export function fulfillmentLabel(status: string): string {
     "Return-Approved": "Return approved",
     Returned: "Return completed",
     "In-progress": "Packed and ready to ship",
-    Completed: "Delivered",
+    Completed: "Order-delivered",
   };
   return map[status] ?? status;
 }

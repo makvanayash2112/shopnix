@@ -37,6 +37,8 @@ function normalizeBecknOrderState(state?: string): string {
     case "Accepted":
     case "In-progress":
     case "Packed":
+    case "Agent-assigned":
+    case "Order-picked-up":
     case "Delivering":
       return "Accepted";
     case "Delivered":
@@ -76,7 +78,9 @@ function resolveContextTimestamp(order: IOrder, fallback: string): string {
 }
 
 function resolveOrderTimestamp(order: IOrder, fallback?: string): string {
-  return order.createdAt?.toISOString?.() || fallback || new Date().toISOString();
+  return typeof order.becknContext?.timestamp === "string"
+    ? order.becknContext.timestamp
+    : (order.createdAt?.toISOString?.() || fallback || new Date().toISOString());
 }
 
 export function buildSelectMessage(
@@ -255,7 +259,7 @@ export function buildOrderMessage(order: IOrder) {
         address,
         tax_number: taxNumber,
         created_at: createdAt,
-        updated_at: updatedAtOrder,
+        updated_at: createdAt,
       },
       cancellation_terms: [],
       tags: [
