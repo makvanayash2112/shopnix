@@ -32,6 +32,13 @@ function resolveCustomerContact(order: IOrder) {
 
 function normalizeBecknOrderState(state?: string): string {
   switch (state) {
+    case "Created":
+      return "Created";
+    case "Accepted":
+    case "In-progress":
+    case "Packed":
+    case "Delivering":
+      return "Accepted";
     case "Delivered":
     case "Completed":
       return "Completed";
@@ -40,9 +47,9 @@ function normalizeBecknOrderState(state?: string): string {
     case "Return-Requested":
     case "Return-Approved":
     case "Returned":
-      return "Completed";
+      return "Accepted";
     default:
-      return "In-progress";
+      return "Created";
   }
 }
 
@@ -62,6 +69,16 @@ function resolveTaxNumber(order: IOrder): string {
   );
 }
 
+function resolveContextTimestamp(order: IOrder, fallback: string): string {
+  return typeof order.becknContext?.timestamp === "string"
+    ? order.becknContext.timestamp
+    : fallback;
+}
+
+function resolveOrderTimestamp(order: IOrder, fallback?: string): string {
+  return order.createdAt?.toISOString?.() || fallback || new Date().toISOString();
+}
+
 export function buildSelectMessage(
   seller: ISeller,
   products: IProduct[],
@@ -74,6 +91,7 @@ export function buildSelectMessage(
   const providerId = resolveProviderId(seller);
   const locationId = resolveLocationId(providerId);
   const sellerContact = resolveSellerContact(seller);
+  const timestamp = new Date().toISOString();
 
   const items = products.map((product) => {
     const selected = selectedItems.find((i) => i.id === product.ondcItemId);
@@ -107,6 +125,9 @@ export function buildSelectMessage(
           id: "F1",
           type: "Delivery",
           tracking: false,
+          "@ondc/org/provider_name": seller.storeName || "Shopnix Store",
+          "@ondc/org/category": "home-delivery",
+          "@ondc/org/TAT": "PT24H",
           state: {
             descriptor: { code: "Pending" },
           },
@@ -114,7 +135,7 @@ export function buildSelectMessage(
             contact: sellerContact,
             time: {
               range: {
-                start: new Date().toISOString(),
+                start: timestamp,
                 end: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
               },
             },
@@ -200,6 +221,11 @@ export function buildOrderMessage(order: IOrder) {
   const paymentType = order.payment?.type || "ON-FULFILLMENT";
   const paymentStatus = order.payment?.status || "NOT-PAID";
   const taxNumber = resolveTaxNumber(order);
+  const createdAt = resolveOrderTimestamp(
+    order,
+    resolveContextTimestamp(order, timestamp)
+  );
+  const updatedAtOrder = order.updatedAt?.toISOString?.() || createdAt;
 
   return {
     order: {
@@ -228,14 +254,25 @@ export function buildOrderMessage(order: IOrder) {
         email: contact.email,
         address,
         tax_number: taxNumber,
-        created_at: timestamp,
-        updated_at: updatedAt,
+        created_at: createdAt,
+        updated_at: updatedAtOrder,
       },
+      cancellation_terms: [],
+      tags: [
+        {
+          code: "order_type",
+          list: [{ code: "type", value: "B2C" }],
+        },
+      ],
+      created_at: createdAt,
+      updated_at: updatedAtOrder,
       fulfillments: [
         {
           id: "F1",
           type: order.fulfillment?.type || "Delivery",
           tracking: Boolean(order.fulfillment?.tracking),
+          "@ondc/org/provider_name": resolvedProviderId,
+          "@ondc/org/TAT": "PT24H",
           state: {
             descriptor: {
               code: order.fulfillment?.state || "Pending",
@@ -243,10 +280,14 @@ export function buildOrderMessage(order: IOrder) {
           },
           start: {
             contact: sellerContact,
+            person: {
+              name: sellerContact.name,
+            },
             time: {
+              timestamp: createdAt,
               range: {
-                start: timestamp,
-                end: updatedAt,
+                start: createdAt,
+                end: updatedAtOrder,
               },
             },
             location: {
@@ -263,6 +304,16 @@ export function buildOrderMessage(order: IOrder) {
               name: contact.name,
               phone: contact.phone,
               email: contact.email,
+            },
+            person: {
+              name: contact.name,
+            },
+            time: {
+              timestamp: updatedAtOrder,
+              range: {
+                start: createdAt,
+                end: updatedAtOrder,
+              },
             },
             location: {
               id: `${locationId}-customer`,
@@ -288,7 +339,14 @@ export function buildOrderMessage(order: IOrder) {
         params: {
           amount: paymentAmount,
           currency: "INR",
+          transaction_id: String(order.transactionId || order.orderId),
         },
+        "@ondc/org/buyer_app_finder_fee_type": "percent",
+        "@ondc/org/buyer_app_finder_fee_amount": "0",
+        "@ondc/org/settlement_basis": "delivery",
+        "@ondc/org/settlement_window": "P1D",
+        "@ondc/org/withholding_amount": "0",
+        "@ondc/org/settlement_details": [],
       },
       quote: {
         price: {

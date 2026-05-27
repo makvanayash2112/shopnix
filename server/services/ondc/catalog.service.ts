@@ -159,6 +159,10 @@ function buildProviderBlock(
 
   return {
     id: providerId,
+    time: {
+      label: "enable",
+      timestamp: new Date().toISOString(),
+    },
     descriptor: {
       name: seller.storeName,
       short_desc: providerShort,
@@ -185,7 +189,7 @@ function buildProviderBlock(
           timestamp: new Date().toISOString(),
           days: "Mon-Sun",
           schedule: {
-            holidays: [],
+            holidays: ["Sunday"],
             frequency: "P1D",
             times: ["00:00-23:59"],
           },
@@ -292,6 +296,12 @@ export function buildMultiSellerCatalogMessage(
         npType
       ),
       "bpp/providers": providers,
+      fulfillments: [
+        {
+          id: "F1",
+          type: "Delivery",
+        },
+      ],
       payments: [
         { id: "1", type: "PRE-FULFILLMENT", collected_by: "BPP" },
         { id: "2", type: "ON-FULFILLMENT", collected_by: "BPP" },
