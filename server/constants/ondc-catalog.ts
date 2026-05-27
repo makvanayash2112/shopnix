@@ -57,7 +57,9 @@ export function resolvePublicImageUrl(
   fallbackId?: string
 ) {
   if (!url) {
-    return ondcFallbackImageUrl(fallbackId);
+    return ondcFallbackImageUrl(
+      fallbackId ?? "default-item"
+    );
   }
 
   // already full URL
