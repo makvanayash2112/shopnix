@@ -35,12 +35,13 @@ function normalizeBecknOrderState(state?: string): string {
     case "Created":
       return "Created";
     case "Accepted":
+      return "Accepted";
     case "In-progress":
     case "Packed":
     case "Agent-assigned":
     case "Order-picked-up":
     case "Delivering":
-      return "Accepted";
+      return "In-progress";
     case "Delivered":
     case "Completed":
       return "Completed";
@@ -78,9 +79,7 @@ function resolveContextTimestamp(order: IOrder, fallback: string): string {
 }
 
 function resolveOrderTimestamp(order: IOrder, fallback?: string): string {
-  return typeof order.becknContext?.timestamp === "string"
-    ? order.becknContext.timestamp
-    : (order.createdAt?.toISOString?.() || fallback || new Date().toISOString());
+  return order.createdAt?.toISOString?.() || fallback || new Date().toISOString();
 }
 
 export function buildSelectMessage(
@@ -225,10 +224,7 @@ export function buildOrderMessage(order: IOrder) {
   const paymentType = order.payment?.type || "ON-FULFILLMENT";
   const paymentStatus = order.payment?.status || "NOT-PAID";
   const taxNumber = resolveTaxNumber(order);
-  const createdAt = resolveOrderTimestamp(
-    order,
-    resolveContextTimestamp(order, timestamp)
-  );
+  const createdAt = order.createdAt?.toISOString?.() || new Date().toISOString();
   const updatedAtOrder = order.updatedAt?.toISOString?.() || createdAt;
 
   return {
@@ -259,17 +255,31 @@ export function buildOrderMessage(order: IOrder) {
         address,
         tax_number: taxNumber,
         created_at: createdAt,
-        updated_at: createdAt,
+        updated_at: updatedAtOrder,
       },
-      cancellation_terms: [],
+      cancellation_terms: [
+        {
+          fulfillment_state: "Pending",
+          reason_required: false,
+          cancellation_fee: {
+            amount: {
+              currency: "INR",
+              value: "0"
+            }
+          }
+        }
+      ],
       tags: [
         {
-          code: "order_type",
-          list: [{ code: "type", value: "B2C" }],
+          code: "bpp_terms",
+          list: [
+            { code: "np_type", value: "MSN" },
+            { code: "tax_number", value: taxNumber }
+          ],
         },
       ],
       created_at: createdAt,
-      updated_at: createdAt,
+      updated_at: updatedAtOrder,
       fulfillments: [
         {
           id: "F1",
@@ -350,7 +360,19 @@ export function buildOrderMessage(order: IOrder) {
         "@ondc/org/settlement_basis": "delivery",
         "@ondc/org/settlement_window": "P1D",
         "@ondc/org/withholding_amount": "0",
-        "@ondc/org/settlement_details": [],
+        "@ondc/org/settlement_details": [
+          {
+            settlement_counterparty: "seller-app",
+            settlement_phase: "sale-amount",
+            settlement_type: "upi",
+            upi_address: "shopnix@upi",
+            settlement_bank_account_no: "1234567890",
+            settlement_ifsc_code: "IFSC0001234",
+            beneficiary_name: "Shopnix Seller",
+            bank_name: "Test Bank",
+            branch_name: "Test Branch"
+          }
+        ],
       },
       quote: {
         price: {

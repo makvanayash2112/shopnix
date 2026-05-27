@@ -296,7 +296,7 @@ export function buildMultiSellerCatalogMessage(
         npType
       ),
       "bpp/providers": providers,
-      fulfillments: [
+      "bpp/fulfillments": [
         {
           id: "F1",
           type: "Delivery",
