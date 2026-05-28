@@ -30,6 +30,35 @@ function resolveCustomerContact(order: IOrder) {
   };
 }
 
+// function normalizeBecknOrderState(status?: string, fulfillmentState?: string): string {
+//   const fState = fulfillmentState || "Pending";
+//   if (
+//     fState === "Packed" ||
+//     fState === "Agent-assigned" ||
+//     fState === "Order-picked-up" ||
+//     fState === "Out-for-delivery" ||
+//     fState === "Delivering"
+//   ) {
+//     return "In-progress";
+//   }
+//   if (fState === "Order-delivered") {
+//     return "Completed";
+//   }
+//   switch (status) {
+//     case "Created": return "Created";
+//     case "Accepted": return "Accepted";
+//     case "In-progress": return "In-progress";
+//     case "Completed": return "Completed";
+//     case "Cancelled": return "Cancelled";
+//     case "Return-Requested":
+//     case "Return-Approved": return "Completed";
+//     default: return "Created";
+//   }
+// }
+
+// REPLACE the function:
+
+
 function normalizeBecknOrderState(status?: string, fulfillmentState?: string): string {
   const fState = fulfillmentState || "Pending";
   if (
@@ -41,20 +70,25 @@ function normalizeBecknOrderState(status?: string, fulfillmentState?: string): s
   ) {
     return "In-progress";
   }
-  if (fState === "Order-delivered") {
-    return "Completed";
-  }
+  if (fState === "Order-delivered") return "Completed";
+  if (fState === "Cancelled") return "Cancelled";
+  if (fState === "Partially-Cancelled") return "In-progress"; // partial cancel still active
+
   switch (status) {
     case "Created": return "Created";
     case "Accepted": return "Accepted";
     case "In-progress": return "In-progress";
     case "Completed": return "Completed";
     case "Cancelled": return "Cancelled";
+    case "Partial-Cancelled": return "In-progress";
     case "Return-Requested":
+    case "Return-Initiated":
     case "Return-Approved": return "Completed";
+    case "Returned": return "Completed";
     default: return "Created";
   }
 }
+
 
 function resolveSellerContact(seller: ISeller) {
   return {
@@ -184,27 +218,295 @@ export function buildSelectMessage(
           currency: "INR",
           value: String(total),
         },
-        breakup: products.map((product) => {
-          const selected = selectedItems.find((i) => i.id === product.ondcItemId);
-          const qty = Number(selected?.quantity?.count ?? 1);
-          return {
-            title: product.name,
-            price: {
-              currency: "INR",
-              value: String(product.price * qty),
-            },
-            item: {
-              id: product.ondcItemId,
-            },
-          };
-        }),
+        // breakup: products.map((product) => {
+        //   const selected = selectedItems.find((i) => i.id === product.ondcItemId);
+        //   const qty = Number(selected?.quantity?.count ?? 1);
+        //   return {
+        //     title: product.name,
+        //     price: {
+        //       currency: "INR",
+        //       value: String(product.price * qty),
+        //     },
+        //     item: {
+        //       id: product.ondcItemId,
+        //     },
+        //   };
+        // }),
+        // REPLACE quote.breakup in buildSelectMessage:
+        // breakup: products.map((product) => {
+        //   const selected = selectedItems.find((i) => i.id === product.ondcItemId);
+        //   const qty = Number(selected?.quantity?.count ?? 1);
+        //   return {
+        //     "@ondc/org/item_id": product.ondcItemId,
+        //     "@ondc/org/item_quantity": { count: qty },
+        //     "@ondc/org/title_type": "item",
+        //     price: {
+        //       currency: "INR",
+        //       value: String(product.price * qty),
+        //     },
+        //     item: {
+        //       id: product.ondcItemId,
+        //       quantity: { count: qty },
+        //     },
+
+        //   };
+        // }),
+
+        breakup: [
+          ...products.map((product) => {
+            const selected = selectedItems.find((i) => i.id === product.ondcItemId);
+            const qty = Number(selected?.quantity?.count ?? 1);
+            return {
+              "@ondc/org/item_id": product.ondcItemId,
+              "@ondc/org/item_quantity": { count: qty },
+              "@ondc/org/title_type": "item",
+              title: product.name,
+              price: {
+                currency: "INR",
+                value: String(product.price * qty),
+              },
+              item: {
+                id: product.ondcItemId,
+                quantity: { count: qty },
+              },
+            };
+          }),
+          {
+            "@ondc/org/title_type": "delivery",
+            title: "Delivery Charges",
+            price: { currency: "INR", value: "0" },
+          },
+          {
+            "@ondc/org/title_type": "tax",
+            title: "Tax",
+            price: { currency: "INR", value: "0" },
+          },
+        ],
+
         ttl: "P1D",
       },
     },
   };
 }
 
-export function buildOrderMessage(order: IOrder) {
+// export function buildOrderMessage(order: IOrder) {
+//   const providerId =
+//     typeof order.becknContext?.providerId === "string"
+//       ? order.becknContext.providerId
+//       : undefined;
+//   const resolvedProviderId = providerId || "SHOPNIX";
+//   const locationId = order.locationId || resolveLocationId(resolvedProviderId);
+//   const address = resolveBillingAddress(order);
+//   const contact = resolveCustomerContact(order);
+//   const sellerContact = {
+//     name: "Shopnix Store",
+//     phone: "9999999999",
+//     email: "support@shopnix.local",
+//   };
+//   const timestamp = order.createdAt?.toISOString?.() || new Date().toISOString();
+//   const updatedAt = order.updatedAt?.toISOString?.() || timestamp;
+//   const paymentAmount = String(order.payment?.amount ?? 0);
+//   const paymentType = order.payment?.type || "ON-FULFILLMENT";
+//   const paymentStatus = order.payment?.status || "NOT-PAID";
+//   const taxNumber = resolveTaxNumber(order);
+//   const billingCreatedAt = typeof order.becknContext?.billing_created_at === "string"
+//     ? order.becknContext.billing_created_at : (order.createdAt?.toISOString?.() || new Date().toISOString());
+//   const billingUpdatedAt = typeof order.becknContext?.billing_updated_at === "string"
+//     ? order.becknContext.billing_updated_at : billingCreatedAt;
+
+//   const orderCreatedAt = typeof order.becknContext?.confirm_order_created_at === "string"
+//     ? order.becknContext.confirm_order_created_at
+//     : (typeof order.becknContext?.init_order_created_at === "string" ? order.becknContext.init_order_created_at : billingCreatedAt);
+
+//   const orderUpdatedAt = typeof order.becknContext?.confirm_order_updated_at === "string"
+//     ? order.becknContext.confirm_order_updated_at
+//     : (typeof order.becknContext?.init_order_updated_at === "string" ? order.becknContext.init_order_updated_at : billingUpdatedAt);
+
+//   return {
+//     order: {
+//       id: order.orderId,
+//       state: normalizeBecknOrderState(order.status, order.fulfillment?.state),
+//       provider: {
+//         id: resolvedProviderId,
+//         locations: [{ id: locationId }],
+//         tags: [
+//           {
+//             code: "selection",
+//             list: [{ code: "seller_id", value: resolvedProviderId }],
+//           },
+//         ],
+//       },
+//       items: order.items.map((item) => ({
+//         id: item.ondcItemId,
+//         fulfillment_id: "F1",
+//         quantity: {
+//           count: item.quantity,
+//         },
+//       })),
+//       billing: {
+//         name: contact.name,
+//         phone: contact.phone,
+//         email: contact.email,
+//         address,
+//         tax_number: taxNumber,
+//         created_at: billingCreatedAt,
+//         updated_at: billingUpdatedAt,
+//       },
+//       cancellation_terms: [
+//         {
+//           fulfillment_state: {
+//             descriptor: {
+//               code: "Pending",
+//               short_desc: "Pending"
+//             }
+//           },
+//           refund_eligible: true,
+//           reason_required: false,
+//           cancellation_fee: {
+//             amount: {
+//               currency: "INR",
+//               value: "0"
+//             },
+//             percentage: "0"
+//           }
+//         }
+//       ],
+//       tags: [
+//         {
+//           code: "bpp_terms",
+//           list: [
+//             { code: "np_type", value: "MSN" },
+//             { code: "tax_number", value: taxNumber }
+//           ],
+//         },
+//       ],
+//       created_at: orderCreatedAt,
+//       updated_at: orderUpdatedAt,
+//       fulfillments: [
+//         {
+//           id: "F1",
+//           type: order.fulfillment?.type || "Delivery",
+//           tracking: Boolean(order.fulfillment?.tracking),
+//           "@ondc/org/provider_name": resolvedProviderId,
+//           "@ondc/org/TAT": "PT24H",
+//           state: {
+//             descriptor: {
+//               code: order.fulfillment?.state || "Pending",
+//             },
+//           },
+//           start: {
+//             contact: sellerContact,
+//             person: {
+//               name: sellerContact.name,
+//             },
+//             time: {
+//               timestamp: orderCreatedAt,
+//               range: {
+//                 start: orderCreatedAt,
+//                 end: orderCreatedAt,
+//               },
+//             },
+//             location: {
+//               id: locationId,
+//               descriptor: {
+//                 name: "Store",
+//               },
+//               gps: order.gps || "12.971599,77.594566",
+//               address,
+//             },
+//           },
+//           end: {
+//             contact: {
+//               name: contact.name,
+//               phone: contact.phone,
+//               email: contact.email,
+//             },
+//             person: {
+//               name: contact.name,
+//             },
+//             time: {
+//               timestamp: orderCreatedAt,
+//               range: {
+//                 start: orderCreatedAt,
+//                 end: orderCreatedAt,
+//               },
+//             },
+//             location: {
+//               id: `${locationId}-customer`,
+//               descriptor: {
+//                 name: "Customer",
+//               },
+//               gps: order.gps || "12.971599,77.594566",
+//               address,
+//             },
+//           },
+//           tags: [
+//             {
+//               code: "routing",
+//               list: [{ code: "type", value: "P2P" }],
+//             },
+//           ],
+//         },
+//       ],
+//       payment: {
+//         type: paymentType,
+//         status: paymentStatus,
+//         collected_by: "BPP",
+//         params: {
+//           amount: paymentAmount,
+//           currency: "INR",
+//           transaction_id: String(order.transactionId || order.orderId),
+//         },
+//         "@ondc/org/buyer_app_finder_fee_type": "percent",
+//         "@ondc/org/buyer_app_finder_fee_amount": "0",
+//         "@ondc/org/settlement_basis": "delivery",
+//         "@ondc/org/settlement_window": "P1D",
+//         "@ondc/org/withholding_amount": "0",
+//         "@ondc/org/settlement_details": [
+//           {
+//             settlement_counterparty: "seller-app",
+//             settlement_phase: "sale-amount",
+//             settlement_type: "upi",
+//             upi_address: "shopnix@upi",
+//             settlement_bank_account_no: "1234567890",
+//             settlement_ifsc_code: "IFSC0001234",
+//             beneficiary_name: "Shopnix Seller",
+//             bank_name: "Test Bank",
+//             branch_name: "Test Branch"
+//           }
+//         ],
+//       },
+//       quote: {
+//         price: {
+//           currency: "INR",
+//           value: paymentAmount,
+//         },
+//         breakup: order.items.map((item) => ({
+//           title: item.name,
+//           price: {
+//             currency: "INR",
+//             value: String(item.price * item.quantity),
+//           },
+//           item: {
+//             id: item.ondcItemId,
+//           },
+//         })),
+//         ttl: "P1D",
+//       },
+//     },
+//   };
+// }
+
+// REPLACE the entire buildOrderMessage function:
+
+
+
+export function buildOrderMessage(order: IOrder, opts?: {
+  cancelledItems?: Array<{ ondcItemId: string; quantity: number; price: number; name: string }>;
+  returnItems?: Array<{ ondcItemId: string; quantity: number; price: number; name: string; reason?: string }>;
+  errorCode?: string;
+  errorMessage?: string;
+}) {
   const providerId =
     typeof order.becknContext?.providerId === "string"
       ? order.becknContext.providerId
@@ -218,26 +520,274 @@ export function buildOrderMessage(order: IOrder) {
     phone: "9999999999",
     email: "support@shopnix.local",
   };
+
   const timestamp = order.createdAt?.toISOString?.() || new Date().toISOString();
-  const updatedAt = order.updatedAt?.toISOString?.() || timestamp;
   const paymentAmount = String(order.payment?.amount ?? 0);
   const paymentType = order.payment?.type || "ON-FULFILLMENT";
   const paymentStatus = order.payment?.status || "NOT-PAID";
   const taxNumber = resolveTaxNumber(order);
-  const billingCreatedAt = typeof order.becknContext?.billing_created_at === "string" 
-    ? order.becknContext.billing_created_at : (order.createdAt?.toISOString?.() || new Date().toISOString());
-  const billingUpdatedAt = typeof order.becknContext?.billing_updated_at === "string" 
+
+  const billingCreatedAt = typeof order.becknContext?.billing_created_at === "string"
+    ? order.becknContext.billing_created_at
+    : (order.createdAt?.toISOString?.() || new Date().toISOString());
+  const billingUpdatedAt = typeof order.becknContext?.billing_updated_at === "string"
     ? order.becknContext.billing_updated_at : billingCreatedAt;
 
-  const orderCreatedAt = typeof order.becknContext?.confirm_order_created_at === "string" 
-    ? order.becknContext.confirm_order_created_at 
-    : (typeof order.becknContext?.init_order_created_at === "string" ? order.becknContext.init_order_created_at : billingCreatedAt);
-    
-  const orderUpdatedAt = typeof order.becknContext?.confirm_order_updated_at === "string" 
-    ? order.becknContext.confirm_order_updated_at 
-    : (typeof order.becknContext?.init_order_updated_at === "string" ? order.becknContext.init_order_updated_at : billingUpdatedAt);
+  const orderCreatedAt = typeof order.becknContext?.confirm_order_created_at === "string"
+    ? order.becknContext.confirm_order_created_at
+    : (typeof order.becknContext?.init_order_created_at === "string"
+      ? order.becknContext.init_order_created_at : billingCreatedAt);
 
-  return {
+  const orderUpdatedAt = new Date().toISOString(); // always current for updates
+
+  // Active items: subtract cancelled items for partial cancel
+  const cancelledItemIds = (order.cancelledItems ?? []).map(ci => ci.ondcItemId);
+  const cancelledQtyMap: Record<string, number> = {};
+  (order.cancelledItems ?? []).forEach(ci => {
+    cancelledQtyMap[ci.ondcItemId] = (cancelledQtyMap[ci.ondcItemId] || 0) + ci.quantity;
+  });
+
+  const returnItemIds = (order.returnItems ?? []).map(ri => ri.ondcItemId);
+  const returnQtyMap: Record<string, number> = {};
+  (order.returnItems ?? []).forEach(ri => {
+    returnQtyMap[ri.ondcItemId] = (returnQtyMap[ri.ondcItemId] || 0) + ri.quantity;
+  });
+
+  // Build items array — for partial cancel, include ALL items but mark cancelled ones
+  const activeItems = order.items.map((item) => {
+    const cancelledQty = cancelledQtyMap[item.ondcItemId] || 0;
+    const returnQty = returnQtyMap[item.ondcItemId] || 0;
+    const activeQty = item.quantity - cancelledQty - returnQty;
+    return {
+      id: item.ondcItemId,
+      fulfillment_id: activeQty > 0 ? "F1" : "C1", // C1 = cancelled fulfillment
+      quantity: { count: Math.max(0, activeQty) },
+      ...(cancelledQty > 0 ? {
+        tags: [{
+          code: "type",
+          list: [{ code: "type", value: "item" }]
+        }, {
+          code: "cancellation",
+          list: [
+            { code: "cancel_reason_id", value: order.cancellationReasonId || "002" },
+            { code: "cancelled_qty", value: String(cancelledQty) },
+          ]
+        }]
+      } : {}),
+    };
+  });
+
+  // Cancellation terms per fulfillment state — required for Flow 3A/3B/3C/7
+  const cancellationTerms = [
+    {
+      fulfillment_state: {
+        descriptor: { code: "Pending", short_desc: "Pending" }
+      },
+      refund_eligible: true,
+      reason_required: false,
+      cancellation_fee: { amount: { currency: "INR", value: "0" }, percentage: "0" }
+    },
+    {
+      fulfillment_state: {
+        descriptor: { code: "Packed", short_desc: "Packed" }
+      },
+      refund_eligible: true,
+      reason_required: true,
+      cancellation_fee: { amount: { currency: "INR", value: "0" }, percentage: "0" }
+    },
+    {
+      fulfillment_state: {
+        descriptor: { code: "Agent-assigned", short_desc: "Agent Assigned" }
+      },
+      refund_eligible: true,
+      reason_required: true,
+      cancellation_fee: { amount: { currency: "INR", value: "0" }, percentage: "0" }
+    },
+    {
+      fulfillment_state: {
+        descriptor: { code: "Order-picked-up", short_desc: "Order Picked Up" }
+      },
+      refund_eligible: true,
+      reason_required: true,
+      cancellation_fee: { amount: { currency: "INR", value: "0" }, percentage: "0" }
+    },
+    {
+      fulfillment_state: {
+        descriptor: { code: "Out-for-delivery", short_desc: "Out for Delivery" }
+      },
+      refund_eligible: false,
+      reason_required: true,
+      cancellation_fee: { amount: { currency: "INR", value: "0" }, percentage: "0" }
+    },
+  ];
+
+  // Quote — recalculate for partial cancel
+  const totalAmount = order.items.reduce((sum, item) => {
+    const cancelledQty = cancelledQtyMap[item.ondcItemId] || 0;
+    const returnQty = returnQtyMap[item.ondcItemId] || 0;
+    const activeQty = item.quantity - cancelledQty - returnQty;
+    return sum + item.price * Math.max(0, activeQty);
+  }, 0);
+
+  // Build quote breakup with item + delivery + refund breakdown
+  const quoteBreakup: Array<{
+    "@ondc/org/item_id"?: string;
+    "@ondc/org/item_quantity"?: { count: number };
+    "@ondc/org/title_type": string;
+    title: string;
+    price: { currency: string; value: string };
+    item?: { id: string; quantity?: { count: number } }
+  }> = [];
+
+  order.items.forEach((item) => {
+    const cancelledQty = cancelledQtyMap[item.ondcItemId] || 0;
+    const returnQty = returnQtyMap[item.ondcItemId] || 0;
+    const activeQty = item.quantity - cancelledQty - returnQty;
+
+    quoteBreakup.push({
+      "@ondc/org/item_id": item.ondcItemId,
+      "@ondc/org/item_quantity": { count: Math.max(0, activeQty) },
+      "@ondc/org/title_type": "item",
+      title: item.name,
+      price: { currency: "INR", value: String(item.price * Math.max(0, activeQty)) },
+      item: { id: item.ondcItemId, quantity: { count: Math.max(0, activeQty) } },
+    });
+
+    if (cancelledQty > 0) {
+      quoteBreakup.push({
+        "@ondc/org/item_id": item.ondcItemId,
+        "@ondc/org/item_quantity": { count: cancelledQty },
+        "@ondc/org/title_type": "cancellation_charges",
+        title: `Cancellation charges for ${item.name}`,
+        price: { currency: "INR", value: "0" },
+        item: { id: item.ondcItemId },
+      });
+    }
+
+    if (returnQty > 0) {
+      quoteBreakup.push({
+        "@ondc/org/item_id": item.ondcItemId,
+        "@ondc/org/item_quantity": { count: returnQty },
+        "@ondc/org/title_type": "refund",
+        title: `Refund for ${item.name}`,
+        price: { currency: "INR", value: String(-(item.price * returnQty)) },
+        item: { id: item.ondcItemId },
+      });
+    }
+  });
+
+  // Add delivery and tax charges to quote breakup
+  quoteBreakup.push(
+    {
+      "@ondc/org/title_type": "delivery",
+      title: "Delivery Charges",
+      price: { currency: "INR", value: "0" },
+    },
+    {
+      "@ondc/org/title_type": "tax",
+      title: "Tax",
+      price: { currency: "INR", value: "0" },
+    }
+  );
+
+  // Build fulfillments array — add F1 (active) and optionally C1 (cancelled items)
+  const fulfillments: unknown[] = [
+    {
+      id: "F1",
+      type: order.fulfillment?.type || "Delivery",
+      tracking: Boolean(order.fulfillment?.tracking),
+      "@ondc/org/provider_name": resolvedProviderId,
+      "@ondc/org/TAT": "PT24H",
+      state: {
+        descriptor: {
+          code: order.fulfillment?.state || "Pending",
+          short_desc: order.fulfillment?.state || "Pending",
+        },
+      },
+      start: {
+        contact: sellerContact,
+        person: { name: sellerContact.name },
+        time: {
+          timestamp: orderCreatedAt,
+          range: { start: orderCreatedAt, end: orderCreatedAt },
+        },
+        location: {
+          id: locationId,
+          descriptor: { name: "Store" },
+          gps: order.gps || "12.971599,77.594566",
+          address,
+        },
+      },
+      end: {
+        contact: { name: contact.name, phone: contact.phone, email: contact.email },
+        person: { name: contact.name },
+        time: {
+          timestamp: orderCreatedAt,
+          range: { start: orderCreatedAt, end: orderCreatedAt },
+        },
+        location: {
+          id: `${locationId}-customer`,
+          descriptor: { name: "Customer" },
+          gps: order.gps || "12.971599,77.594566",
+          address,
+        },
+      },
+      tags: [
+        { code: "routing", list: [{ code: "type", value: "P2P" }] },
+      ],
+    },
+  ];
+
+  // Add cancelled fulfillment C1 for partial/full cancel flows
+  if (cancelledItemIds.length > 0 || order.status === "Cancelled" || order.status === "Partial-Cancelled") {
+    fulfillments.push({
+      id: "C1",
+      type: "Cancel",
+      tracking: false,
+      state: {
+        descriptor: {
+          code: "Cancelled",
+          short_desc: order.cancellationReasonDesc || "Cancelled by merchant",
+        },
+      },
+      tags: [
+        {
+          code: "cancel_request",
+          list: [
+            { code: "reason_id", value: order.cancellationReasonId || "002" },
+            { code: "initiated_by", value: resolvedProviderId },
+          ],
+        },
+      ],
+    });
+  }
+
+  // Add return fulfillment R1 for return flows
+  if (returnItemIds.length > 0 || order.status === "Return-Initiated" || order.status === "Return-Requested" || order.status === "Return-Approved" || order.status === "Returned") {
+    fulfillments.push({
+      id: "R1",
+      type: "Return",
+      tracking: false,
+      state: {
+        descriptor: {
+          code: order.status === "Returned" ? "Return-Delivered" : "Return-Initiated",
+          short_desc: order.status,
+        },
+      },
+      tags: [
+        {
+          code: "return_request",
+          list: [
+            { code: "id", value: `RET-${order.orderId}` },
+            { code: "reason_id", value: order.returnInfo?.reason || "001" },
+            { code: "initiated_by", value: order.becknContext?.bap_id as string || "buyer" },
+          ],
+        },
+      ],
+    });
+  }
+
+  const orderMessage: Record<string, unknown> = {
     order: {
       id: order.orderId,
       state: normalizeBecknOrderState(order.status, order.fulfillment?.state),
@@ -251,13 +801,7 @@ export function buildOrderMessage(order: IOrder) {
           },
         ],
       },
-      items: order.items.map((item) => ({
-        id: item.ondcItemId,
-        fulfillment_id: "F1",
-        quantity: {
-          count: item.quantity,
-        },
-      })),
+      items: activeItems,
       billing: {
         name: contact.name,
         phone: contact.phone,
@@ -267,108 +811,25 @@ export function buildOrderMessage(order: IOrder) {
         created_at: billingCreatedAt,
         updated_at: billingUpdatedAt,
       },
-      cancellation_terms: [
-        {
-          fulfillment_state: {
-            descriptor: {
-              code: "Pending",
-              short_desc: "Pending"
-            }
-          },
-          refund_eligible: true,
-          reason_required: false,
-          cancellation_fee: {
-            amount: {
-              currency: "INR",
-              value: "0"
-            },
-            percentage: "0"
-          }
-        }
-      ],
+      cancellation_terms: cancellationTerms,
       tags: [
         {
           code: "bpp_terms",
           list: [
             { code: "np_type", value: "MSN" },
-            { code: "tax_number", value: taxNumber }
+            { code: "tax_number", value: taxNumber },
           ],
         },
       ],
       created_at: orderCreatedAt,
       updated_at: orderUpdatedAt,
-      fulfillments: [
-        {
-          id: "F1",
-          type: order.fulfillment?.type || "Delivery",
-          tracking: Boolean(order.fulfillment?.tracking),
-          "@ondc/org/provider_name": resolvedProviderId,
-          "@ondc/org/TAT": "PT24H",
-          state: {
-            descriptor: {
-              code: order.fulfillment?.state || "Pending",
-            },
-          },
-          start: {
-            contact: sellerContact,
-            person: {
-              name: sellerContact.name,
-            },
-            time: {
-              timestamp: orderCreatedAt,
-              range: {
-                start: orderCreatedAt,
-                end: orderCreatedAt,
-              },
-            },
-            location: {
-              id: locationId,
-              descriptor: {
-                name: "Store",
-              },
-              gps: order.gps || "12.971599,77.594566",
-              address,
-            },
-          },
-          end: {
-            contact: {
-              name: contact.name,
-              phone: contact.phone,
-              email: contact.email,
-            },
-            person: {
-              name: contact.name,
-            },
-            time: {
-              timestamp: orderCreatedAt,
-              range: {
-                start: orderCreatedAt,
-                end: orderCreatedAt,
-              },
-            },
-            location: {
-              id: `${locationId}-customer`,
-              descriptor: {
-                name: "Customer",
-              },
-              gps: order.gps || "12.971599,77.594566",
-              address,
-            },
-          },
-          tags: [
-            {
-              code: "routing",
-              list: [{ code: "type", value: "P2P" }],
-            },
-          ],
-        },
-      ],
+      fulfillments,
       payment: {
         type: paymentType,
         status: paymentStatus,
         collected_by: "BPP",
         params: {
-          amount: paymentAmount,
+          amount: String(totalAmount),
           currency: "INR",
           transaction_id: String(order.transactionId || order.orderId),
         },
@@ -387,27 +848,17 @@ export function buildOrderMessage(order: IOrder) {
             settlement_ifsc_code: "IFSC0001234",
             beneficiary_name: "Shopnix Seller",
             bank_name: "Test Bank",
-            branch_name: "Test Branch"
-          }
+            branch_name: "Test Branch",
+          },
         ],
       },
       quote: {
-        price: {
-          currency: "INR",
-          value: paymentAmount,
-        },
-        breakup: order.items.map((item) => ({
-          title: item.name,
-          price: {
-            currency: "INR",
-            value: String(item.price * item.quantity),
-          },
-          item: {
-            id: item.ondcItemId,
-          },
-        })),
+        price: { currency: "INR", value: String(totalAmount) },
+        breakup: quoteBreakup,
         ttl: "P1D",
       },
     },
   };
+
+  return orderMessage;
 }

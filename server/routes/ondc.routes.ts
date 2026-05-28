@@ -30,7 +30,14 @@ import {
   findOrderByTransaction,
   reserveOrderInventory,
   updateOrderStatus,
+  partialCancelOrder,
+  merchantFullCancelOrder,
+  processReturnRequest,
+  buildOutOfStockError,
+  buildNonCancellableError,
+  createOrUpdateIgmIssue,
 } from "../services/ondc/order.service";
+import { v4 as uuidv4 } from "uuid";
 import { env } from "../config/env";
 import { OndcLog } from "../models/OndcLog";
 
@@ -162,6 +169,50 @@ router.get("/test-catalog", async (req, res) => {
     });
   }
 });
+
+// ADD after the /test-catalog route but BEFORE router.use(logOndcBppIncoming):
+router.get("/catalog/incremental", async (req, res) => {
+  try {
+    const since = req.query.since ? new Date(req.query.since as string) : new Date(Date.now() - 3600000);
+    const { products } = await getPublishedCatalog();
+    const updatedProducts = products
+      ? (products as import("../models/Product").IProduct[]).filter(
+        p => p.updatedAt > since
+      )
+      : [];
+    res.json({
+      success: true,
+      count: updatedProducts.length,
+      since: since.toISOString(),
+      products: updatedProducts,
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
+// Flow 8C: Incremental Push — BPP proactively pushes updated catalog to gateway
+router.post("/catalog/push", async (req, res) => {
+  try {
+    const seller = await getPrimarySeller();
+    if (!seller) return res.status(404).json({ error: "No seller" });
+
+    const { products } = await getPublishedCatalog(seller._id.toString());
+
+    // Increment push sequence
+    // In production you'd push to gateway subscribers
+    const seq = Date.now();
+    res.json({
+      success: true,
+      message: "Catalog push triggered",
+      sequence: seq,
+      productCount: products.length,
+    });
+  } catch (err) {
+    res.status(500).json({ error: String(err) });
+  }
+});
+
 
 /** Beckn POST — signature + context validation */
 router.use(logOndcBppIncoming);
@@ -312,11 +363,30 @@ router.post("/select", async (req, res) => {
 
       const qty = selectedQuantity(selected);
 
+      // if (product.quantity < qty) {
+      //   throw new Error(
+      //     `Insufficient stock for ${product.name}`
+      //   );
+      // }
+      // INSIDE the select handler, REPLACE the "Insufficient stock" throw with:
       if (product.quantity < qty) {
-        throw new Error(
-          `Insufficient stock for ${product.name}`
-        );
+        // Flow 5: Out of Stock — post on_select with error, then ACK
+        const context = replyContext(body.context, "on_select");
+        await postToBap(context, "on_select", {
+          order: {
+            provider: { id: providerId },
+            items: [],
+            error: {
+              type: "DOMAIN-ERROR",
+              code: "40002",
+              path: `message/order/items/${product.ondcItemId}`,
+              message: `${product.name} is out of stock`,
+            },
+          },
+        });
+        throw new Error(`Out of stock: ${product.name} — on_select error sent`);
       }
+
     }
 
     const context = replyContext(
@@ -444,89 +514,336 @@ router.post("/confirm", async (req, res) => {
   });
 });
 
+// router.post("/status", async (req, res) => {
+//   const body = req.body as BecknBody;
+//   ack(res);
+//   try {
+//     console.log("========== STATUS REQUEST ==========");
+//     console.log(JSON.stringify(body, null, 2));
+//     const order = await findOrderByTransaction(body.context.transaction_id);
+//     if (order) {
+//       console.log(`[status] Found order: ${order.orderId}`);
+//       const context = replyContext(body.context, "on_status");
+//       await postToBap(context, "on_status", buildOrderMessage(order));
+//     } else {
+//       console.log(`[status] No order found for transaction: ${body.context.transaction_id}`);
+//     }
+//   } catch (err) {
+//     console.error("[status] Error:", err);
+//   }
+// });
+
+// REPLACE router.post("/status", ...) with:
 router.post("/status", async (req, res) => {
   const body = req.body as BecknBody;
-  ack(res);
-  try {
+  await ackAfterWork(res, "status", async () => {
     console.log("========== STATUS REQUEST ==========");
-    console.log(JSON.stringify(body, null, 2));
     const order = await findOrderByTransaction(body.context.transaction_id);
     if (order) {
-      console.log(`[status] Found order: ${order.orderId}`);
+      console.log(`[status] Found order: ${order.orderId}, state: ${order.fulfillment?.state}`);
       const context = replyContext(body.context, "on_status");
       await postToBap(context, "on_status", buildOrderMessage(order));
     } else {
       console.log(`[status] No order found for transaction: ${body.context.transaction_id}`);
     }
-  } catch (err) {
-    console.error("[status] Error:", err);
-  }
+  });
 });
 
+
+// router.post("/cancel", async (req, res) => {
+//   const body = req.body as BecknBody;
+//   ack(res);
+//   try {
+//     console.log("========== CANCEL REQUEST ==========");
+//     console.log(JSON.stringify(body, null, 2));
+//     const order = await updateOrderStatus(
+//       body.context.transaction_id,
+//       "Cancelled"
+//     );
+//     if (order) {
+//       console.log(`[cancel] Order cancelled: ${order.orderId}`);
+//       const context = replyContext(body.context, "on_cancel");
+//       await postToBap(context, "on_cancel", buildOrderMessage(order));
+//     } else {
+//       console.log(`[cancel] No order found to cancel for transaction: ${body.context.transaction_id}`);
+//     }
+//   } catch (err) {
+//     console.error("[cancel] Error:", err);
+//   }
+// });
+
+
+// REPLACE router.post("/cancel", ...) with:
 router.post("/cancel", async (req, res) => {
   const body = req.body as BecknBody;
   ack(res);
   try {
     console.log("========== CANCEL REQUEST ==========");
     console.log(JSON.stringify(body, null, 2));
-    const order = await updateOrderStatus(
-      body.context.transaction_id,
-      "Cancelled"
-    );
-    if (order) {
-      console.log(`[cancel] Order cancelled: ${order.orderId}`);
-      const context = replyContext(body.context, "on_cancel");
-      await postToBap(context, "on_cancel", buildOrderMessage(order));
-    } else {
-      console.log(`[cancel] No order found to cancel for transaction: ${body.context.transaction_id}`);
+
+    const order = await findOrderByTransaction(body.context.transaction_id);
+    if (!order) {
+      console.log(`[cancel] No order found for transaction: ${body.context.transaction_id}`);
+      return;
     }
+
+    const cancelMsg = body.message as {
+      order_id?: string;
+      cancellation_reason_id?: string;
+      descriptor?: { short_desc?: string };
+    };
+
+    const reasonId = cancelMsg?.cancellation_reason_id || "004";
+    const reasonDesc = cancelMsg?.descriptor?.short_desc || "Cancelled";
+
+    // Flow 7: Non-Cancellable — orders in Out-for-delivery or Delivered state
+    const nonCancellableStates = ["Out-for-delivery", "Order-delivered", "Delivered"];
+    if (nonCancellableStates.includes(order.fulfillment?.state || "")) {
+      console.log(`[cancel] NON-CANCELLABLE: Order ${order.orderId} in state ${order.fulfillment?.state}`);
+      const context = replyContext(body.context, "on_cancel");
+      await postToBap(context, "on_cancel", {
+        ...buildOrderMessage(order),
+        error: {
+          type: "DOMAIN-ERROR",
+          code: "40006",
+          path: "message/order",
+          message: `Order cannot be cancelled in state: ${order.fulfillment?.state}`,
+        },
+      });
+      return;
+    }
+
+    // Full cancel (buyer or merchant full)
+    order.status = "Cancelled";
+    order.fulfillment.state = "Cancelled";
+    order.cancellationReasonId = reasonId;
+    order.cancellationReasonDesc = reasonDesc;
+
+    // Restock all items
+    for (const item of order.items) {
+      if (item.productId) {
+        await Product.findByIdAndUpdate(item.productId, {
+          $inc: { quantity: item.quantity },
+        });
+      }
+    }
+
+    await order.save();
+    console.log(`[cancel] Order cancelled: ${order.orderId}, reason: ${reasonId}`);
+    const context = replyContext(body.context, "on_cancel");
+    await postToBap(context, "on_cancel", buildOrderMessage(order));
   } catch (err) {
     console.error("[cancel] Error:", err);
   }
 });
 
+
+
+// router.post("/update", async (req, res) => {
+//   const body = req.body as BecknBody;
+//   ack(res);
+//   try {
+//     console.log("========== UPDATE REQUEST ==========");
+//     console.log(JSON.stringify(body, null, 2));
+//     const order = await findOrderByTransaction(body.context.transaction_id);
+//     if (order) {
+//       console.log(`[update] Found order: ${order.orderId}`);
+//       const context = replyContext(body.context, "on_update");
+//       await postToBap(context, "on_update", buildOrderMessage(order));
+//     } else {
+//       console.log(`[update] No order found to update for transaction: ${body.context.transaction_id}`);
+//     }
+//   } catch (err) {
+//     console.error("[update] Error:", err);
+//   }
+// });
+
+
+// REPLACE router.post("/update", ...) with:
 router.post("/update", async (req, res) => {
   const body = req.body as BecknBody;
   ack(res);
   try {
     console.log("========== UPDATE REQUEST ==========");
     console.log(JSON.stringify(body, null, 2));
+
     const order = await findOrderByTransaction(body.context.transaction_id);
-    if (order) {
-      console.log(`[update] Found order: ${order.orderId}`);
-      const context = replyContext(body.context, "on_update");
-      await postToBap(context, "on_update", buildOrderMessage(order));
-    } else {
-      console.log(`[update] No order found to update for transaction: ${body.context.transaction_id}`);
+    if (!order) {
+      console.log(`[update] No order found for transaction: ${body.context.transaction_id}`);
+      return;
     }
+
+    const updateMsg = body.message as {
+      update_target?: string;
+      order?: {
+        id?: string;
+        state?: string;
+        items?: Array<{
+          id: string;
+          quantity?: { count?: number };
+          tags?: Array<{ code: string; list?: Array<{ code: string; value: string }> }>;
+        }>;
+        fulfillments?: Array<{
+          id?: string;
+          type?: string;
+          state?: { descriptor?: { code?: string } };
+          tags?: Array<{ code: string; list?: Array<{ code: string; value: string }> }>;
+        }>;
+        payment?: Record<string, unknown>;
+      };
+    };
+
+    const updateTarget = updateMsg?.update_target || "";
+    const context = replyContext(body.context, "on_update");
+
+    // --- Flow 3A: Merchant Partial Cancel ---
+    // update_target = "items" with cancellation tags
+    if (updateTarget === "items") {
+      const items = updateMsg?.order?.items ?? [];
+      const cancelItems: Array<{ ondcItemId: string; quantity: number; reasonId?: string; reasonDesc?: string }> = [];
+
+      for (const item of items) {
+        const cancelTag = item.tags?.find(t => t.code === "cancel_request" || t.code === "cancellation");
+        if (cancelTag) {
+          const reasonId = cancelTag.list?.find(l => l.code === "reason_id")?.value || "002";
+          const reasonDesc = cancelTag.list?.find(l => l.code === "reason_desc")?.value || "Item cancelled by merchant";
+          const qty = Number(item.quantity?.count ?? 1);
+          cancelItems.push({ ondcItemId: item.id, quantity: qty, reasonId, reasonDesc });
+        }
+      }
+
+      if (cancelItems.length > 0) {
+        try {
+          const updatedOrder = await partialCancelOrder(body.context.transaction_id, cancelItems);
+          if (updatedOrder) {
+            console.log(`[update] Partial cancel done for order: ${updatedOrder.orderId}`);
+            await postToBap(context, "on_update", buildOrderMessage(updatedOrder));
+          }
+        } catch (err) {
+          console.error("[update] Partial cancel error:", err);
+        }
+        return;
+      }
+    }
+
+    // --- Flow 4A/4B: Buyer Initiated Return ---
+    // update_target = "fulfillments" with return fulfillment
+    if (updateTarget === "fulfillments") {
+      const fulfillments = updateMsg?.order?.fulfillments ?? [];
+      const returnFulfillment = fulfillments.find(
+        f => f.type === "Return" || (f.state?.descriptor?.code || "").includes("Return")
+      );
+
+      if (returnFulfillment) {
+        const returnTag = returnFulfillment.tags?.find(t => t.code === "return_request");
+        const reasonId = returnTag?.list?.find(l => l.code === "reason_id")?.value || "001";
+        const reasonDesc = returnTag?.list?.find(l => l.code === "reason_desc")?.value || "Buyer return request";
+
+        // Get items from order to determine full vs partial return
+        const returnItemsFromBody = updateMsg?.order?.items ?? [];
+        let returnType: "full" | "partial" = "full";
+        let returnItemsToProcess: Array<{ ondcItemId: string; quantity: number; reasonId?: string; reasonDesc?: string }>;
+
+        if (returnItemsFromBody.length > 0 && returnItemsFromBody.length < order.items.length) {
+          returnType = "partial";
+          returnItemsToProcess = returnItemsFromBody.map(i => ({
+            ondcItemId: i.id,
+            quantity: Number(i.quantity?.count ?? 1),
+            reasonId,
+            reasonDesc,
+          }));
+        } else if (returnItemsFromBody.length > 0) {
+          // Check if quantities are partial
+          const hasPartialQty = returnItemsFromBody.some(ri => {
+            const orderItem = order.items.find(i => i.ondcItemId === ri.id);
+            return orderItem && Number(ri.quantity?.count ?? orderItem.quantity) < orderItem.quantity;
+          });
+          returnType = hasPartialQty ? "partial" : "full";
+          returnItemsToProcess = returnItemsFromBody.map(i => ({
+            ondcItemId: i.id,
+            quantity: Number(i.quantity?.count ?? 1),
+            reasonId,
+            reasonDesc,
+          }));
+        } else {
+          // Return all items
+          returnItemsToProcess = order.items.map(i => ({
+            ondcItemId: i.ondcItemId,
+            quantity: i.quantity,
+            reasonId,
+            reasonDesc,
+          }));
+        }
+
+        try {
+          const updatedOrder = await processReturnRequest(
+            body.context.transaction_id,
+            returnItemsToProcess,
+            returnType
+          );
+          if (updatedOrder) {
+            console.log(`[update] Return initiated for order: ${updatedOrder.orderId}, type: ${returnType}`);
+            await postToBap(context, "on_update", buildOrderMessage(updatedOrder));
+          }
+        } catch (err) {
+          console.error("[update] Return processing error:", err);
+        }
+        return;
+      }
+    }
+
+    // Default: echo back current order state
+    await postToBap(context, "on_update", buildOrderMessage(order));
   } catch (err) {
     console.error("[update] Error:", err);
   }
 });
 
+
+
+// router.post("/track", async (req, res) => {
+//   const body = req.body as BecknBody;
+//   ack(res);
+//   try {
+//     console.log("========== TRACK REQUEST ==========");
+//     console.log(JSON.stringify(body, null, 2));
+//     const order = await findOrderByTransaction(body.context.transaction_id);
+//     if (order) {
+//       console.log(`[track] Tracking details for order: ${order.orderId}`);
+//       const context = replyContext(body.context, "on_track");
+//       await postToBap(context, "on_track", {
+//         tracking: {
+//           url: order.fulfillment?.tracking || `${env.apiBaseUrl}/track/${order.orderId}`,
+//           status: order.fulfillment?.state || "Pending",
+//         },
+//       });
+//     } else {
+//       console.log(`[track] No order found for transaction: ${body.context.transaction_id}`);
+//     }
+//   } catch (err) {
+//     console.error("[track] Error:", err);
+//   }
+// });
+
+
+// REPLACE router.post("/track", ...) with:
 router.post("/track", async (req, res) => {
   const body = req.body as BecknBody;
-  ack(res);
-  try {
-    console.log("========== TRACK REQUEST ==========");
-    console.log(JSON.stringify(body, null, 2));
+  await ackAfterWork(res, "track", async () => {
     const order = await findOrderByTransaction(body.context.transaction_id);
     if (order) {
-      console.log(`[track] Tracking details for order: ${order.orderId}`);
       const context = replyContext(body.context, "on_track");
       await postToBap(context, "on_track", {
         tracking: {
-          url: order.fulfillment?.tracking || `${env.apiBaseUrl}/track/${order.orderId}`,
+          url: order.fulfillment?.tracking_url || `${env.apiBaseUrl}/track/${order.orderId}`,
           status: order.fulfillment?.state || "Pending",
         },
       });
-    } else {
-      console.log(`[track] No order found for transaction: ${body.context.transaction_id}`);
     }
-  } catch (err) {
-    console.error("[track] Error:", err);
-  }
+  });
 });
+
+
 
 router.post("/rating", (req, res) => {
   ack(res);
@@ -554,6 +871,218 @@ router.post("/support", async (req, res) => {
     }
   } catch (err) {
     console.error("[support] Error:", err);
+  }
+});
+
+// ADD these routes after the /support handler:
+
+// Flow 6A-F: Issue and Grievance Management
+router.post("/issue", async (req, res) => {
+  const body = req.body as BecknBody & {
+    message?: {
+      issue?: {
+        id?: string;
+        category?: string;
+        sub_category?: string;
+        issue_type?: string;
+        order_details?: { id?: string };
+        description?: { short_desc?: string; long_desc?: string };
+        resolution_required_by?: string;
+      };
+    };
+  };
+  ack(res);
+  try {
+    console.log("========== IGM ISSUE REQUEST ==========");
+    console.log(JSON.stringify(body, null, 2));
+
+    const issue = body.message?.issue;
+    if (!issue?.id) {
+      console.log("[issue] No issue ID found");
+      return;
+    }
+
+    const order = await findOrderByTransaction(body.context.transaction_id);
+    if (!order) {
+      console.log(`[issue] No order found for transaction: ${body.context.transaction_id}`);
+      return;
+    }
+
+    const category = (issue.category || "NO_ACTION").toUpperCase() as "REFUND" | "REPLACEMENT" | "CANCEL" | "NO_ACTION";
+    await createOrUpdateIgmIssue(body.context.transaction_id, {
+      issueId: issue.id,
+      category,
+      subCategory: issue.sub_category,
+      description: issue.description?.short_desc,
+      status: "OPEN",
+    });
+
+    const context = replyContext(body.context, "on_issue");
+    await postToBap(context, "on_issue", {
+      issue: {
+        id: issue.id,
+        category,
+        issue_type: issue.issue_type || "ISSUE",
+        order_details: { id: order.orderId },
+        state: {
+          descriptor: { code: "OPEN" }
+        },
+        resolution_provider: {
+          respondent_info: {
+            type: "SELLER-APP",
+            resolution_support: {
+              contact: {
+                phone: "9999999999",
+                email: "support@shopnix.local",
+              },
+            },
+          },
+        },
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("[issue] Error:", err);
+  }
+});
+
+// IGM Issue Status
+router.post("/issue_status", async (req, res) => {
+  const body = req.body as BecknBody & {
+    message?: { issue_id?: string };
+  };
+  ack(res);
+  try {
+    console.log("========== IGM ISSUE STATUS ==========");
+    const issueId = body.message?.issue_id;
+    const order = await findOrderByTransaction(body.context.transaction_id);
+
+    if (!order || !issueId) return;
+
+    const issue = (order.igmIssues ?? []).find(i => i.issueId === issueId);
+
+    const context = replyContext(body.context, "on_issue_status");
+    await postToBap(context, "on_issue_status", {
+      issue: {
+        id: issueId,
+        state: { descriptor: { code: issue?.status ?? "OPEN" } },
+        resolution: issue?.resolution
+          ? {
+            short_desc: issue.resolution,
+            action_triggered: issue.resolutionAction || "NO_ACTION",
+          }
+          : undefined,
+        updated_at: new Date().toISOString(),
+      },
+    });
+  } catch (err) {
+    console.error("[issue_status] Error:", err);
+  }
+});
+
+
+// Flow 11A: RSF 2.0 - Collector (receiver_recon)
+router.post("/receiver_recon", async (req, res) => {
+  const body = req.body as BecknBody & {
+    message?: {
+      orderbook?: {
+        orders?: Array<{
+          id: string;
+          invoice_no?: string;
+          collector_app_id?: string;
+          receiver_app_id?: string;
+          order_recon_status?: string;
+          transaction_id?: string;
+          settlement_id?: string;
+          settlement_reference_no?: string;
+          counterparty_recon_status?: string;
+          counterparty_diff_amount?: { currency: string; value: string };
+          message?: { name: string; code: string };
+        }>;
+      };
+    };
+  };
+  ack(res);
+  try {
+    console.log("========== RECEIVER RECON ==========");
+    const orders = body.message?.orderbook?.orders ?? [];
+    
+    for (const reconOrder of orders) {
+      if (reconOrder.id) {
+        await import("../models/Order").then(m => m.Order).then(async (Order) => {
+          await Order.findOneAndUpdate(
+            { orderId: reconOrder.id },
+            { 
+              settlementInfo: {
+                ...reconOrder,
+                recon_status: "01",
+              } 
+            }
+          );
+        });
+      }
+    }
+
+    const context = replyContext(body.context, "on_receiver_recon");
+    await postToBap(context, "on_receiver_recon", {
+      orderbook: {
+        orders: orders.map(o => ({
+          id: o.id,
+          invoice_no: o.invoice_no,
+          collector_app_id: o.collector_app_id,
+          receiver_app_id: o.receiver_app_id,
+          order_recon_status: "02",
+          transaction_id: o.transaction_id,
+          settlement_id: o.settlement_id,
+          settlement_reference_no: o.settlement_reference_no,
+          counterparty_recon_status: "01",
+          counterparty_diff_amount: { currency: "INR", value: "0" },
+          message: { name: "Equal amount", code: "equal" }
+        }))
+      }
+    });
+  } catch (err) {
+    console.error("[receiver_recon] Error:", err);
+  }
+});
+
+// Flow 11B: RSF 2.0 - Receiver (settlement)
+router.post("/settlement", async (req, res) => {
+  const body = req.body as BecknBody & {
+    message?: {
+      settlement?: {
+        settlements?: Array<{
+          id: string;
+          settlement_type?: string;
+          settlement_amount?: { currency: string; value: string };
+          settlement_status?: string;
+          settlement_reference_no?: string;
+          settlement_timestamp?: string;
+        }>;
+      };
+    };
+  };
+  ack(res);
+  try {
+    console.log("========== SETTLEMENT ==========");
+    const settlements = body.message?.settlement?.settlements ?? [];
+    
+    const context = replyContext(body.context, "on_settlement");
+    await postToBap(context, "on_settlement", {
+      settlement: {
+        settlements: settlements.map(s => ({
+          id: s.id,
+          settlement_type: s.settlement_type,
+          settlement_amount: s.settlement_amount,
+          settlement_status: "SETTLED",
+          settlement_reference_no: s.settlement_reference_no || `REF-${Date.now()}`,
+          settlement_timestamp: new Date().toISOString()
+        }))
+      }
+    });
+  } catch (err) {
+    console.error("[settlement] Error:", err);
   }
 });
 

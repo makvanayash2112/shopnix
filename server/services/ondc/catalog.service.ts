@@ -395,3 +395,41 @@ export async function resolveSellerFromOndcItemId(
 }
 
 export { getDefaultSeller, getPrimarySeller } from "../seller.service";
+
+
+// ADD: Incremental pull support (Flow 8B) — products updated since timestamp
+export async function getIncrementalCatalog(
+  sinceTimestamp: Date,
+  sellerId?: string
+) {
+  const query: Record<string, unknown> = {
+    isPublished: true,
+    updatedAt: { $gt: sinceTimestamp },
+  };
+  if (sellerId) query.sellerId = sellerId;
+
+  const products = await Product.find(query)
+    .sort({ updatedAt: -1 })
+    .limit(MAX_PRODUCTS_PER_SELLER);
+
+  return products;
+}
+
+// ADD: Validate catalog for ONDC compliance (Flow 9 — catalog rejection prevention)
+export function validateCatalogItem(product: IProduct): { valid: boolean; errors: string[] } {
+  const errors: string[] = [];
+
+  if (!product.name?.trim()) errors.push("name is required");
+  if (!product.ondcItemId?.trim()) errors.push("ondcItemId is required");
+  if (product.price <= 0) errors.push("price must be positive");
+  if (!product.images || product.images.length === 0) errors.push("at least 1 image required");
+  if (!product.description?.trim()) errors.push("description is required for ONDC");
+  if (product.quantity < 0) errors.push("quantity cannot be negative");
+
+  const validCategories = ["grocery", "fruits-vegetables", "beauty", "electronics", "fashion", "books", "health", "sports", "home-kitchen"];
+  if (!validCategories.includes(product.categorySlug)) {
+    errors.push(`categorySlug must be one of: ${validCategories.join(", ")}`);
+  }
+
+  return { valid: errors.length === 0, errors };
+}

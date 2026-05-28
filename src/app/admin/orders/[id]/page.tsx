@@ -6,6 +6,7 @@ import { apiFetch } from "@/lib/api";
 import { Badge } from "@/components/ui/Badge";
 import { Button } from "@/components/ui/Button";
 import { Card } from "@/components/ui/Card";
+import { Input } from "@/components/ui/Input";
 import { displayStatus, normalizeStatus } from "@/lib/order-status";
 import type { Order } from "@/types";
 
@@ -53,6 +54,10 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState<Order | null>(null);
   const [nextStatuses, setNextStatuses] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [cancelItems, setCancelItems] = useState<Record<string, number>>({});
+  const [cancelReason, setCancelReason] = useState("002");
+  const [igmResolution, setIgmResolution] = useState("");
+  const [igmAction, setIgmAction] = useState<"REFUND" | "REPLACEMENT" | "CANCEL" | "NO_ACTION">("REFUND");
 
   useEffect(() => {
     apiFetch<{ order: Order; nextStatuses: string[] }>(`/orders/${id}`).then(
@@ -62,6 +67,49 @@ export default function OrderDetailPage() {
       }
     );
   }, [id]);
+
+  async function handlePartialCancel() {
+    const itemsPayload = Object.entries(cancelItems)
+      .filter(([_, qty]) => qty > 0)
+      .map(([ondcItemId, quantity]) => ({ ondcItemId, quantity }));
+
+    if (itemsPayload.length === 0) return alert("Select items to cancel");
+
+    setLoading(true);
+    try {
+      await apiFetch(`/orders/${id}/partial-cancel`, {
+        method: "PATCH",
+        body: JSON.stringify({ items: itemsPayload, reasonId: cancelReason }),
+      });
+      alert("Partial cancel applied");
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message || "Failed to cancel");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleIgmResolve(issueId: string) {
+    if (!igmResolution) return alert("Provide a resolution description");
+    setLoading(true);
+    try {
+      await apiFetch(`/orders/${id}/igm/${issueId}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "RESOLVED",
+          resolution: igmResolution,
+          resolutionAction: igmAction,
+        }),
+      });
+      alert("Issue resolved");
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message || "Failed to resolve issue");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   async function updateStatus(status: string) {
     setLoading(true);
@@ -158,16 +206,127 @@ export default function OrderDetailPage() {
 
       <Card title="Items">
         <ul className="divide-y text-sm">
-          {order.items.map((item, i) => (
-            <li key={i} className="flex justify-between py-2">
-              <span>
-                {item.name} × {item.quantity}
-              </span>
-              <span>₹{item.price * item.quantity}</span>
-            </li>
-          ))}
+          {order.items.map((item, i) => {
+            const cancelledCount = order.cancelledItems?.filter(c => c.ondcItemId === item.ondcItemId).reduce((s, c) => s + c.quantity, 0) || 0;
+            const availableToCancel = item.quantity - cancelledCount;
+            const isCancelable = ["Accepted", "Packed"].includes(norm);
+
+            return (
+              <li key={i} className="flex flex-col py-3 gap-2">
+                <div className="flex justify-between items-center">
+                  <span className={cancelledCount === item.quantity ? "line-through text-slate-400" : ""}>
+                    {item.name} × {item.quantity}
+                  </span>
+                  <span>₹{item.price * item.quantity}</span>
+                </div>
+                {cancelledCount > 0 && (
+                  <div className="text-xs text-red-500">
+                    Cancelled: {cancelledCount}
+                  </div>
+                )}
+                {isCancelable && availableToCancel > 0 && (
+                  <div className="flex items-center gap-2 mt-1">
+                    <label className="text-xs text-slate-500">Cancel Qty:</label>
+                    <Input 
+                      type="number" 
+                      className="w-20 h-8" 
+                      min="0" 
+                      max={availableToCancel} 
+                      value={cancelItems[item.ondcItemId] || 0}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCancelItems(prev => ({ ...prev, [item.ondcItemId]: Number(e.target.value) }))}
+                    />
+                  </div>
+                )}
+              </li>
+            );
+          })}
         </ul>
+        {["Accepted", "Packed"].includes(norm) && Object.values(cancelItems).some(v => v > 0) && (
+          <div className="mt-4 pt-4 border-t flex flex-col gap-2">
+            <select 
+              className="flex h-9 w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+              value={cancelReason} 
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setCancelReason(e.target.value)}
+            >
+              <option value="002">002 - Item out of stock</option>
+              <option value="005">005 - Merchant rejected</option>
+            </select>
+            <Button onClick={handlePartialCancel} disabled={loading} variant="danger">
+              Apply Partial Cancel
+            </Button>
+          </div>
+        )}
       </Card>
+
+      {/* IGM Management Card */}
+      {order.igmIssues && order.igmIssues.length > 0 && (
+        <Card title="Issue & Grievance (IGM)">
+          <div className="space-y-4 text-sm">
+            {order.igmIssues.map((issue, idx) => (
+              <div key={idx} className="border p-3 rounded-md space-y-2">
+                <div className="flex justify-between items-start">
+                  <p className="font-semibold">{issue.category} Issue</p>
+                  <Badge status={issue.status} />
+                </div>
+                <p className="text-slate-600">ID: {issue.issueId}</p>
+                <p><strong>Description:</strong> {issue.description || "N/A"}</p>
+                
+                {issue.status !== "CLOSED" && issue.status !== "RESOLVED" && (
+                  <div className="mt-4 space-y-2 bg-slate-50 p-3 rounded">
+                    <p className="font-medium text-xs text-slate-500">Provide Resolution</p>
+                    <Input 
+                      placeholder="Resolution details..." 
+                      value={igmResolution}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>) => setIgmResolution(e.target.value)}
+                    />
+                    <select 
+                      className="flex h-9 w-full rounded-md border border-slate-200 bg-transparent px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={igmAction}
+                      onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setIgmAction(e.target.value as any)}
+                    >
+                      <option value="REFUND">Refund</option>
+                      <option value="REPLACEMENT">Replacement</option>
+                      <option value="NO_ACTION">No Action</option>
+                    </select>
+                    <Button onClick={() => handleIgmResolve(issue.issueId)} disabled={loading}>
+                      Resolve Issue
+                    </Button>
+                  </div>
+                )}
+                {issue.resolution && (
+                  <div className="mt-2 text-xs bg-green-50 p-2 rounded text-green-800">
+                    <strong>Resolved ({issue.resolutionAction}):</strong> {issue.resolution}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </Card>
+      )}
+
+      {/* RSF Settlement Card */}
+      {order.settlementInfo && (
+        <Card title="Settlement & Reconciliation (RSF)">
+          <dl className="grid gap-2 text-sm sm:grid-cols-2">
+            <div>
+              <dt className="text-slate-500">Recon Status</dt>
+              <dd>{order.settlementInfo.recon_status === "01" ? "Reconciled" : order.settlementInfo.recon_status || "Pending"}</dd>
+            </div>
+            {order.settlementInfo.settlement_reference_no && (
+              <div>
+                <dt className="text-slate-500">Settlement Ref</dt>
+                <dd className="font-mono">{order.settlementInfo.settlement_reference_no}</dd>
+              </div>
+            )}
+            {order.settlementInfo.counterparty_diff_amount && (
+              <div>
+                <dt className="text-slate-500">Difference</dt>
+                <dd>₹{order.settlementInfo.counterparty_diff_amount.value}</dd>
+              </div>
+            )}
+          </dl>
+        </Card>
+      )}
 
       {actions.length > 0 && (
         <Card title="Update order status">

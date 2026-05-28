@@ -27,7 +27,6 @@ export function normalizeCategory(input?: string): string {
   if (!input) return "grocery";
   const slug = input.toLowerCase().trim().replace(/\s+/g, "-");
   const found = PRODUCT_CATEGORIES.find(
-    (c) => c.slug === slug || c.name.toLowerCase() === input.toLowerCase()
-  );
+    (c) => c.slug === slug || c.name.toLowerCase() === input.toLowerCase());
   return found?.slug ?? (slug || "other");
 }

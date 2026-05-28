@@ -127,6 +127,39 @@ export interface Order {
     status?: string;
     sellerNote?: string;
   };
+  cancelledItems?: {
+    ondcItemId: string;
+    name: string;
+    quantity: number;
+    price: number;
+    reason?: string;
+    cancelledAt?: string;
+  }[];
+  returnItems?: {
+    ondcItemId: string;
+    name: string;
+    quantity: number;
+    price: number;
+    reason?: string;
+    returnType?: "full" | "partial";
+    requestedAt?: string;
+    status?: string;
+  }[];
+  igmIssues?: {
+    issueId: string;
+    category: string;
+    status: string;
+    description?: string;
+    resolution?: string;
+    resolutionAction?: string;
+    createdAt: string;
+  }[];
+  settlementInfo?: {
+    recon_status?: string;
+    [key: string]: any;
+  };
+  cancellationReasonId?: string;
+  cancellationReasonDesc?: string;
   createdAt: string;
   updatedAt?: string;
 }

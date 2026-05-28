@@ -67,6 +67,27 @@ export function applyStatusUpdate(order: IOrder, nextStatus: OrderStatus) {
       status: "completed",
     };
   }
+  // ADD these cases inside applyStatusUpdate, after the "Returned" block:
+
+  if (nextStatus === "Partial-Cancelled") {
+    order.fulfillment.state = "Partially-Cancelled";
+  }
+
+  if (nextStatus === "Return-Initiated") {
+    order.fulfillment.state = "Return-Initiated";
+    order.returnInfo = {
+      ...order.returnInfo,
+      requestedAt: new Date(),
+      status: "pending",
+    };
+  }
+
+  if (nextStatus === "Return-Rejected") {
+    order.returnInfo = {
+      ...order.returnInfo,
+      status: "rejected",
+    };
+  }
 }
 
 export async function restockOrderItems(order: IOrder) {

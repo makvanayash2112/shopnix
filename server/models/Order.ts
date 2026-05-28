@@ -62,12 +62,62 @@ export interface IOrder extends Document {
   };
   deliveredAt?: Date;
   returnInfo?: IReturnInfo;
+  cancelledItems?: ICancelledItem[];       // For Flow 3A partial cancel
+  returnItems?: IReturnItem[];             // For Flow 4A/4B return items
+  cancellationReasonId?: string;           // ONDC reason code e.g. "002"
+  cancellationReasonDesc?: string;         // Human readable
+  nonCancellable?: boolean;                // For Flow 7
+  igmIssues?: IIgmIssue[];                 // For Flow 6A-F
+  settlementInfo?: Record<string, unknown>; // For Flow 11A/11B
+  incrementalPushSeq?: number;             // For Flow 8C incremental push
+
   becknContext?: Record<string, unknown>;
   locationId?: string;
   gps?: string;
   createdAt: Date;
   updatedAt: Date;
 }
+
+// ADD these new interface types BEFORE IOrder interface (around line 22):
+
+export interface ICancelledItem {
+  ondcItemId: string;
+  name: string;
+  quantity: number;
+  price: number;
+  reason?: string;
+  cancelledAt?: Date;
+}
+
+export interface IReturnItem {
+  ondcItemId: string;
+  name: string;
+  quantity: number;
+  price: number;
+  reason?: string;
+  returnType?: "full" | "partial";
+  requestedAt?: Date;
+  approvedAt?: Date;
+  completedAt?: Date;
+  status?: "pending" | "approved" | "completed" | "rejected";
+}
+
+export interface IIgmIssue {
+  issueId: string;
+  bapIssueId?: string;
+  category: "REFUND" | "REPLACEMENT" | "CANCEL" | "NO_ACTION";
+  subCategory?: string;
+  status: "OPEN" | "PROCESSING" | "RESOLVED" | "ESCALATED" | "CLOSED";
+  description?: string;
+  resolution?: string;
+  resolutionAction?: string;
+  createdAt: Date;
+  updatedAt?: Date;
+  closedAt?: Date;
+  escalatedAt?: Date;
+  remarksByBnp?: string;
+}
+
 
 const orderSchema = new Schema<IOrder>(
   {
@@ -147,6 +197,62 @@ const orderSchema = new Schema<IOrder>(
       },
       sellerNote: String,
     },
+    cancelledItems: [
+      {
+        ondcItemId: { type: String },
+        name: { type: String },
+        quantity: { type: Number },
+        price: { type: Number },
+        reason: { type: String },
+        cancelledAt: { type: Date },
+      },
+    ],
+    returnItems: [
+      {
+        ondcItemId: { type: String },
+        name: { type: String },
+        quantity: { type: Number },
+        price: { type: Number },
+        reason: { type: String },
+        returnType: { type: String, enum: ["full", "partial"] },
+        requestedAt: { type: Date },
+        approvedAt: { type: Date },
+        completedAt: { type: Date },
+        status: {
+          type: String,
+          enum: ["pending", "approved", "completed", "rejected"],
+        },
+      },
+    ],
+    cancellationReasonId: { type: String },
+    cancellationReasonDesc: { type: String },
+    nonCancellable: { type: Boolean, default: false },
+    igmIssues: [
+      {
+        issueId: { type: String, required: true },
+        bapIssueId: { type: String },
+        category: {
+          type: String,
+          enum: ["REFUND", "REPLACEMENT", "CANCEL", "NO_ACTION"],
+        },
+        subCategory: { type: String },
+        status: {
+          type: String,
+          enum: ["OPEN", "PROCESSING", "RESOLVED", "ESCALATED", "CLOSED"],
+          default: "OPEN",
+        },
+        description: { type: String },
+        resolution: { type: String },
+        resolutionAction: { type: String },
+        createdAt: { type: Date, default: Date.now },
+        updatedAt: { type: Date },
+        closedAt: { type: Date },
+        escalatedAt: { type: Date },
+        remarksByBnp: { type: String },
+      },
+    ],
+    settlementInfo: { type: Schema.Types.Mixed },
+    incrementalPushSeq: { type: Number, default: 0 },
     locationId: String,
     gps: String,
     becknContext: Schema.Types.Mixed,
