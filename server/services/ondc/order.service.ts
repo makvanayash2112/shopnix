@@ -195,9 +195,6 @@ export async function partialCancelOrder(
   if (totalCancelledQty >= totalOrderedQty) {
     order.status = "Cancelled";
     order.fulfillment.state = "Cancelled";
-  } else {
-    order.status = "Partial-Cancelled";
-    order.fulfillment.state = "Partially-Cancelled";
   }
 
   order.cancellationReasonId = cancelItems[0]?.reasonId || "002";
