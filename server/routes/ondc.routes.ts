@@ -443,12 +443,39 @@ router.post("/init", async (req, res) => {
 
     const msgOrder = body.message?.order as BecknOrderMessage;
     if (msgOrder) {
+      const rawBillingCreated = msgOrder.billing?.created_at;
+      const rawBillingUpdated = msgOrder.billing?.updated_at;
+
+      function normalizeTs(raw: unknown): string | undefined {
+        if (!raw) return undefined;
+        if (typeof raw === "string") return raw;
+        if (raw instanceof Date) return raw.toISOString();
+        if (typeof raw === "object") {
+          const r = raw as Record<string, unknown>;
+          const ts = r["timestamp"];
+          if (typeof ts === "string") return ts;
+          const iso = r["iso"];
+          if (typeof iso === "string") return iso;
+          const val = r["value"];
+          if (typeof val === "string") return val;
+        }
+        if (typeof raw === "number") return new Date(raw).toISOString();
+        return String(raw);
+      }
+
       order.becknContext = {
         ...(order.becknContext || {}),
-        billing_created_at: msgOrder.billing?.created_at,
-        billing_updated_at: msgOrder.billing?.updated_at,
-        init_order_created_at: msgOrder.created_at,
-        init_order_updated_at: msgOrder.updated_at,
+        billing_created_at: normalizeTs(rawBillingCreated) ?? order.createdAt?.toISOString?.(),
+        billing_updated_at:
+          normalizeTs(rawBillingUpdated) ?? normalizeTs(rawBillingCreated) ?? order.createdAt?.toISOString?.(),
+        init_order_created_at:
+          typeof msgOrder.created_at === "string"
+            ? msgOrder.created_at
+            : normalizeTs((msgOrder as unknown as Record<string, unknown>).created_at),
+        init_order_updated_at:
+          typeof msgOrder.updated_at === "string"
+            ? msgOrder.updated_at
+            : normalizeTs((msgOrder as unknown as Record<string, unknown>).updated_at),
       };
       order.markModified("becknContext");
       await order.save();
