@@ -106,16 +106,6 @@ function resolveTaxNumber(order: IOrder): string {
   );
 }
 
-function resolveContextTimestamp(order: IOrder, fallback: string): string {
-  return typeof order.becknContext?.timestamp === "string"
-    ? order.becknContext.timestamp
-    : fallback;
-}
-
-function resolveOrderTimestamp(order: IOrder, fallback?: string): string {
-  return order.createdAt?.toISOString?.() || fallback || new Date().toISOString();
-}
-
 export function buildSelectMessage(
   seller: ISeller,
   products: IProduct[],
@@ -218,40 +208,6 @@ export function buildSelectMessage(
           currency: "INR",
           value: String(total),
         },
-        // breakup: products.map((product) => {
-        //   const selected = selectedItems.find((i) => i.id === product.ondcItemId);
-        //   const qty = Number(selected?.quantity?.count ?? 1);
-        //   return {
-        //     title: product.name,
-        //     price: {
-        //       currency: "INR",
-        //       value: String(product.price * qty),
-        //     },
-        //     item: {
-        //       id: product.ondcItemId,
-        //     },
-        //   };
-        // }),
-        // REPLACE quote.breakup in buildSelectMessage:
-        // breakup: products.map((product) => {
-        //   const selected = selectedItems.find((i) => i.id === product.ondcItemId);
-        //   const qty = Number(selected?.quantity?.count ?? 1);
-        //   return {
-        //     "@ondc/org/item_id": product.ondcItemId,
-        //     "@ondc/org/item_quantity": { count: qty },
-        //     "@ondc/org/title_type": "item",
-        //     price: {
-        //       currency: "INR",
-        //       value: String(product.price * qty),
-        //     },
-        //     item: {
-        //       id: product.ondcItemId,
-        //       quantity: { count: qty },
-        //     },
-
-        //   };
-        // }),
-
         breakup: [
           ...products.map((product) => {
             const selected = selectedItems.find((i) => i.id === product.ondcItemId);
@@ -267,19 +223,31 @@ export function buildSelectMessage(
               },
               item: {
                 id: product.ondcItemId,
-                quantity: { count: qty },
+                quantity: {
+                  count: qty,
+                  available: { count: String(qty) },
+                  maximum: { count: String(qty) },
+                },
+                price: {
+                  currency: "INR",
+                  value: String(product.price * qty),
+                },
               },
             };
           }),
           {
+            "@ondc/org/item_id": products[0]?.ondcItemId || "item",
             "@ondc/org/title_type": "delivery",
             title: "Delivery Charges",
             price: { currency: "INR", value: "0" },
+            item: { id: products[0]?.ondcItemId || "item" },
           },
           {
+            "@ondc/org/item_id": products[0]?.ondcItemId || "item",
             "@ondc/org/title_type": "tax",
             title: "Tax",
             price: { currency: "INR", value: "0" },
+            item: { id: products[0]?.ondcItemId || "item" },
           },
         ],
 
@@ -501,12 +469,7 @@ export function buildSelectMessage(
 
 
 
-export function buildOrderMessage(order: IOrder, opts?: {
-  cancelledItems?: Array<{ ondcItemId: string; quantity: number; price: number; name: string }>;
-  returnItems?: Array<{ ondcItemId: string; quantity: number; price: number; name: string; reason?: string }>;
-  errorCode?: string;
-  errorMessage?: string;
-}) {
+export function buildOrderMessage(order: IOrder) {
   const providerId =
     typeof order.becknContext?.providerId === "string"
       ? order.becknContext.providerId
@@ -521,8 +484,6 @@ export function buildOrderMessage(order: IOrder, opts?: {
     email: "support@shopnix.local",
   };
 
-  const timestamp = order.createdAt?.toISOString?.() || new Date().toISOString();
-  const paymentAmount = String(order.payment?.amount ?? 0);
   const paymentType = order.payment?.type || "ON-FULFILLMENT";
   const paymentStatus = order.payment?.status || "NOT-PAID";
   const taxNumber = resolveTaxNumber(order);
@@ -531,14 +492,20 @@ export function buildOrderMessage(order: IOrder, opts?: {
     ? order.becknContext.billing_created_at
     : (order.createdAt?.toISOString?.() || new Date().toISOString());
   const billingUpdatedAt = typeof order.becknContext?.billing_updated_at === "string"
-    ? order.becknContext.billing_updated_at : billingCreatedAt;
+    ? order.becknContext.billing_updated_at
+    : billingCreatedAt;
 
   const orderCreatedAt = typeof order.becknContext?.confirm_order_created_at === "string"
     ? order.becknContext.confirm_order_created_at
     : (typeof order.becknContext?.init_order_created_at === "string"
-      ? order.becknContext.init_order_created_at : billingCreatedAt);
+      ? order.becknContext.init_order_created_at
+      : billingCreatedAt);
 
-  const orderUpdatedAt = new Date().toISOString(); // always current for updates
+  const orderUpdatedAt = typeof order.becknContext?.confirm_order_updated_at === "string"
+    ? order.becknContext.confirm_order_updated_at
+    : (typeof order.becknContext?.init_order_updated_at === "string"
+      ? order.becknContext.init_order_updated_at
+      : billingUpdatedAt);
 
   // Active items: subtract cancelled items for partial cancel
   const cancelledItemIds = (order.cancelledItems ?? []).map(ci => ci.ondcItemId);
@@ -553,28 +520,32 @@ export function buildOrderMessage(order: IOrder, opts?: {
     returnQtyMap[ri.ondcItemId] = (returnQtyMap[ri.ondcItemId] || 0) + ri.quantity;
   });
 
-  // Build items array — for partial cancel, include ALL items but mark cancelled ones
-  const activeItems = order.items.map((item) => {
+  // Build items array — only include active quantities, keep cancellation metadata in fulfillments and quote
+  const activeItems = order.items.flatMap((item) => {
     const cancelledQty = cancelledQtyMap[item.ondcItemId] || 0;
     const returnQty = returnQtyMap[item.ondcItemId] || 0;
     const activeQty = item.quantity - cancelledQty - returnQty;
-    return {
+    if (activeQty <= 0) return [];
+    return [{
       id: item.ondcItemId,
-      fulfillment_id: activeQty > 0 ? "F1" : "C1", // C1 = cancelled fulfillment
-      quantity: { count: Math.max(0, activeQty) },
+      fulfillment_id: "F1",
+      quantity: { count: activeQty },
       ...(cancelledQty > 0 ? {
-        tags: [{
-          code: "type",
-          list: [{ code: "type", value: "item" }]
-        }, {
-          code: "cancellation",
-          list: [
-            { code: "cancel_reason_id", value: order.cancellationReasonId || "002" },
-            { code: "cancelled_qty", value: String(cancelledQty) },
-          ]
-        }]
+        tags: [
+          {
+            code: "type",
+            list: [{ code: "type", value: "item" }],
+          },
+          {
+            code: "cancellation",
+            list: [
+              { code: "cancel_reason_id", value: order.cancellationReasonId || "002" },
+              { code: "cancelled_qty", value: String(cancelledQty) },
+            ],
+          },
+        ],
       } : {}),
-    };
+    }];
   });
 
   // Cancellation terms per fulfillment state — required for Flow 3A/3B/3C/7
@@ -629,6 +600,8 @@ export function buildOrderMessage(order: IOrder, opts?: {
     return sum + item.price * Math.max(0, activeQty);
   }, 0);
 
+  const primaryItemId = order.items[0]?.ondcItemId || "item";
+
   // Build quote breakup with item + delivery + refund breakdown
   const quoteBreakup: Array<{
     "@ondc/org/item_id"?: string;
@@ -636,7 +609,15 @@ export function buildOrderMessage(order: IOrder, opts?: {
     "@ondc/org/title_type": string;
     title: string;
     price: { currency: string; value: string };
-    item?: { id: string; quantity?: { count: number } }
+    item?: {
+      id: string;
+      quantity?: {
+        count?: number;
+        available?: { count: string };
+        maximum?: { count: string };
+      };
+      price?: { currency: string; value: string };
+    };
   }> = [];
 
   order.items.forEach((item) => {
@@ -650,7 +631,15 @@ export function buildOrderMessage(order: IOrder, opts?: {
       "@ondc/org/title_type": "item",
       title: item.name,
       price: { currency: "INR", value: String(item.price * Math.max(0, activeQty)) },
-      item: { id: item.ondcItemId, quantity: { count: Math.max(0, activeQty) } },
+      item: {
+        id: item.ondcItemId,
+        quantity: {
+          count: Math.max(0, activeQty),
+          available: { count: String(Math.max(0, activeQty)) },
+          maximum: { count: String(Math.max(0, activeQty)) },
+        },
+        price: { currency: "INR", value: String(item.price * Math.max(0, activeQty)) },
+      },
     });
 
     if (cancelledQty > 0) {
@@ -660,7 +649,11 @@ export function buildOrderMessage(order: IOrder, opts?: {
         "@ondc/org/title_type": "cancellation_charges",
         title: `Cancellation charges for ${item.name}`,
         price: { currency: "INR", value: "0" },
-        item: { id: item.ondcItemId },
+        item: {
+          id: item.ondcItemId,
+          quantity: { count: cancelledQty },
+          price: { currency: "INR", value: "0" },
+        },
       });
     }
 
@@ -671,7 +664,11 @@ export function buildOrderMessage(order: IOrder, opts?: {
         "@ondc/org/title_type": "refund",
         title: `Refund for ${item.name}`,
         price: { currency: "INR", value: String(-(item.price * returnQty)) },
-        item: { id: item.ondcItemId },
+        item: {
+          id: item.ondcItemId,
+          quantity: { count: returnQty },
+          price: { currency: "INR", value: String(-(item.price * returnQty)) },
+        },
       });
     }
   });
@@ -679,14 +676,24 @@ export function buildOrderMessage(order: IOrder, opts?: {
   // Add delivery and tax charges to quote breakup
   quoteBreakup.push(
     {
+      "@ondc/org/item_id": primaryItemId,
       "@ondc/org/title_type": "delivery",
       title: "Delivery Charges",
       price: { currency: "INR", value: "0" },
+      item: {
+        id: primaryItemId,
+        quantity: { count: 0 },
+      },
     },
     {
+      "@ondc/org/item_id": primaryItemId,
       "@ondc/org/title_type": "tax",
       title: "Tax",
       price: { currency: "INR", value: "0" },
+      item: {
+        id: primaryItemId,
+        quantity: { count: 0 },
+      },
     }
   );
 
@@ -707,6 +714,12 @@ export function buildOrderMessage(order: IOrder, opts?: {
       start: {
         contact: sellerContact,
         person: { name: sellerContact.name },
+        instructions: {
+          code: "pickup",
+          name: "Pickup",
+          short_desc: "Seller will hand over the order to the delivery partner",
+          long_desc: "Please pickup the order from the seller location and deliver to the customer",
+        },
         time: {
           timestamp: orderCreatedAt,
           range: { start: orderCreatedAt, end: orderCreatedAt },

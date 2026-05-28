@@ -23,21 +23,17 @@ import {
   useMsnCatalog,
 } from "../services/ondc/catalog.service";
 import { getPrimarySeller } from "../services/seller.service";
-import { Product, type IProduct } from "../models/Product";
+import { Product } from "../models/Product";
 import { Seller } from "../models/Seller";
 import {
   createOrderFromInit,
   findOrderByTransaction,
   reserveOrderInventory,
-  updateOrderStatus,
   partialCancelOrder,
   merchantFullCancelOrder,
   processReturnRequest,
-  buildOutOfStockError,
-  buildNonCancellableError,
   createOrUpdateIgmIssue,
 } from "../services/ondc/order.service";
-import { v4 as uuidv4 } from "uuid";
 import { env } from "../config/env";
 import { OndcLog } from "../models/OndcLog";
 
@@ -51,6 +47,15 @@ type BecknBody = {
 type BecknSelectedItem = {
   id: string;
   quantity?: { count?: number };
+};
+
+type BecknOrderMessage = {
+  billing?: {
+    created_at?: string;
+    updated_at?: string;
+  };
+  created_at?: string;
+  updated_at?: string;
 };
 
 function selectedQuantity(item: BecknSelectedItem): number {
@@ -436,7 +441,7 @@ router.post("/init", async (req, res) => {
       orderMsg?.provider?.id
     );
 
-    const msgOrder = body.message?.order as any;
+    const msgOrder = body.message?.order as BecknOrderMessage;
     if (msgOrder) {
       order.becknContext = {
         ...(order.becknContext || {}),
@@ -489,7 +494,7 @@ router.post("/confirm", async (req, res) => {
       (body.message?.order as { id?: string })
         ?.id;
 
-    const msgOrder = body.message?.order as any;
+    const msgOrder = body.message?.order as BecknOrderMessage;
     if (msgOrder) {
       order.becknContext = {
         ...(order.becknContext || {}),
@@ -790,6 +795,24 @@ router.post("/update", async (req, res) => {
         }
         return;
       }
+
+      const cancelFulfillment = fulfillments.find(
+        f => f.type === "Cancel" || f.tags?.some(t => t.code === "cancel_request" || t.code === "cancellation") );
+      if (cancelFulfillment) {
+        const cancelTag = cancelFulfillment.tags?.find(t => t.code === "cancel_request" || t.code === "cancellation");
+        const reasonId = cancelTag?.list?.find(l => l.code === "reason_id")?.value || "002";
+        const reasonDesc = cancelTag?.list?.find(l => l.code === "reason_desc")?.value || "Merchant cancelled order";
+        try {
+          const updatedOrder = await merchantFullCancelOrder(body.context.transaction_id, reasonId, reasonDesc, true);
+          if (updatedOrder) {
+            console.log(`[update] Full cancel done for order: ${updatedOrder.orderId}`);
+            await postToBap(context, "on_update", buildOrderMessage(updatedOrder));
+          }
+        } catch (err) {
+          console.error("[update] Merchant full cancel error:", err);
+        }
+        return;
+      }
     }
 
     // Default: echo back current order state
@@ -844,6 +867,30 @@ router.post("/track", async (req, res) => {
 });
 
 
+
+router.post("/info", async (req, res) => {
+  const body = req.body as BecknBody;
+  await ackAfterWork(res, "info", async () => {
+    const order = await findOrderByTransaction(body.context.transaction_id);
+    if (!order) {
+      console.log(`[info] No order found for transaction: ${body.context.transaction_id}`);
+      return;
+    }
+    const context = replyContext(body.context, "on_info");
+    await postToBap(context, "on_info", buildOrderMessage(order));
+  });
+});
+
+router.post("/catalog/rejection", async (req, res) => {
+  ack(res);
+  try {
+    const body = req.body as BecknBody;
+    console.log("========== CATALOG REJECTION ==========");
+    console.log(JSON.stringify(body, null, 2));
+  } catch (err) {
+    console.error("[catalog/rejection] Error:", err);
+  }
+});
 
 router.post("/rating", (req, res) => {
   ack(res);
