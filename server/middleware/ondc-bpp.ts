@@ -186,7 +186,7 @@ export async function logOndcBppIncoming(
 
       return res
         .status(400)
-        .json(buildNackResponse({ message: "Invalid Beckn context" }));
+        .json(buildNackResponse({ message: "Invalid Beckn context" }, body?.context));
     }
 
     const headerToVerify = authHeader || gatewayAuth;
@@ -199,7 +199,7 @@ export async function logOndcBppIncoming(
         .json(
           buildNackResponse({
             message: "Authorization header missing",
-          })
+          }, body?.context)
         );
     }
 
@@ -246,7 +246,7 @@ export async function logOndcBppIncoming(
         .json(
           buildNackResponse({
             message: "Invalid Authorization Signature",
-          })
+          }, body?.context)
         );
     }
 
@@ -271,7 +271,7 @@ export async function logOndcBppIncoming(
       .json(
         buildNackResponse({
           message: "Internal Server Error",
-        })
+        }, body?.context)
       );
   }
 }

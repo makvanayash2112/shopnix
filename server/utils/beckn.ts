@@ -17,16 +17,18 @@ export interface BecknContext {
   ttl?: string;
 }
 
-export function buildAckResponse() {
+export function buildAckResponse(context?: Partial<BecknContext>) {
   return {
+    ...(context ? { context } : {}),
     message: {
       ack: { status: "ACK" as const },
     },
   };
 }
 
-export function buildNackResponse(error?: { type?: string; code?: string; message?: string }) {
+export function buildNackResponse(error?: { type?: string; code?: string; message?: string }, context?: Partial<BecknContext>) {
   return {
+    ...(context ? { context } : {}),
     message: {
       ack: { status: "NACK" as const },
     },
@@ -62,7 +64,16 @@ export function replyContext(
     bpp_uri: incoming.bpp_uri || env.ondc.bppUri,
     transaction_id: incoming.transaction_id,
     message_id: preserveMessageId ? incoming.message_id : uuidv4(),
-    timestamp: new Date().toISOString(),
+    timestamp: (() => {
+      let ts = new Date().toISOString();
+      if (incoming.timestamp && ts <= incoming.timestamp) {
+        const incDate = new Date(incoming.timestamp);
+        if (!isNaN(incDate.getTime())) {
+          ts = new Date(incDate.getTime() + 1).toISOString();
+        }
+      }
+      return ts;
+    })(),
     ttl: incoming.ttl || "PT30S",
   };
 }

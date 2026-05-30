@@ -494,16 +494,12 @@ export function buildOrderMessage(order: IOrder, contextOpts?: OrderMessageConte
   const paymentStatus = order.payment?.status || "NOT-PAID";
   const taxNumber = resolveTaxNumber(order);
 
-  const billingCreatedAt = typeof order.becknContext?.init_order_created_at === "string"
-    ? order.becknContext.init_order_created_at
-    : (typeof order.becknContext?.billing_created_at === "string"
+  const billingCreatedAt = typeof order.becknContext?.billing_created_at === "string"
       ? order.becknContext.billing_created_at
-      : (order.createdAt?.toISOString?.() || new Date().toISOString()));
-  const billingUpdatedAt = typeof order.becknContext?.init_order_updated_at === "string"
-    ? order.becknContext.init_order_updated_at
-    : (typeof order.becknContext?.billing_updated_at === "string"
+      : (order.createdAt?.toISOString?.() || new Date().toISOString());
+  const billingUpdatedAt = typeof order.becknContext?.billing_updated_at === "string"
       ? order.becknContext.billing_updated_at
-      : billingCreatedAt);
+      : billingCreatedAt;
 
   const orderCreatedAt = typeof order.becknContext?.confirm_order_created_at === "string"
     ? order.becknContext.confirm_order_created_at
@@ -601,6 +597,17 @@ export function buildOrderMessage(order: IOrder, contextOpts?: OrderMessageConte
       cancellation_fee: { amount: { currency: "INR", value: "0" }, percentage: "0" }
     },
   ];
+
+  // Cancellation block
+  let cancellationBlock = undefined;
+  if (order.status === "Cancelled" || order.status === "Partial-Cancelled") {
+    cancellationBlock = {
+      cancelled_by: resolvedProviderId,
+      reason: {
+        id: order.cancellationReasonId || "002"
+      }
+    };
+  }
 
   // Quote — recalculate for partial cancel
   const totalAmount = order.items.reduce((sum, item) => {
@@ -766,6 +773,7 @@ export function buildOrderMessage(order: IOrder, contextOpts?: OrderMessageConte
     fulfillments.push({
       id: "C1",
       type: "Cancel",
+      "@ondc/org/TAT": "PT24H",
       tracking: false,
       state: {
         descriptor: {
@@ -905,12 +913,13 @@ export function buildOrderMessage(order: IOrder, contextOpts?: OrderMessageConte
           code: "bpp_terms",
           list: [
             { code: "np_type", value: "MSN" },
-            { code: "tax_number", value: taxNumber },
+            { code: "tax_number", value: taxNumber || "NA" },
           ],
         },
       ],
       created_at: orderCreatedAt,
       updated_at: orderUpdatedAt,
+      cancellation: cancellationBlock,
       fulfillments,
       payment: {
         type: paymentType,

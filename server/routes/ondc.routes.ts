@@ -62,8 +62,8 @@ function selectedQuantity(item: BecknSelectedItem): number {
   return Math.max(1, Number(item.quantity?.count ?? 1));
 }
 
-function ack(res: import("express").Response) {
-  return res.status(200).json(buildAckResponse());
+function ack(res: import("express").Response, context?: BecknContext) {
+  return res.status(200).json(buildAckResponse(context));
 }
 
 /** Browser / portal health check — no Beckn body */
@@ -225,7 +225,7 @@ router.use(logOndcBppIncoming);
 router.post("/search", async (req, res) => {
   const body = req.body as BecknBody;
 
-  await ackAfterWork(res, "search", async () => {
+  await ackAfterWork(res, "search", body.context, async () => {
     logOndcBpp("search — building catalog", {
       transaction_id: body.context?.transaction_id,
       bap_id: body.context?.bap_id,
@@ -317,7 +317,7 @@ router.post("/search", async (req, res) => {
 router.post("/select", async (req, res) => {
   const body = req.body as BecknBody;
 
-  await ackAfterWork(res, "select", async () => {
+  await ackAfterWork(res, "select", body.context, async () => {
     const providerId =
       (body.message?.order as {
         provider?: { id?: string };
@@ -422,7 +422,7 @@ router.post("/select", async (req, res) => {
 router.post("/init", async (req, res) => {
   const body = req.body as BecknBody;
 
-  await ackAfterWork(res, "init", async () => {
+  await ackAfterWork(res, "init", body.context, async () => {
     const orderMsg = body.message?.order as {
       provider?: { id?: string };
 
@@ -497,7 +497,7 @@ router.post("/init", async (req, res) => {
 router.post("/confirm", async (req, res) => {
   const body = req.body as BecknBody;
 
-  await ackAfterWork(res, "confirm", async () => {
+  await ackAfterWork(res, "confirm", body.context, async () => {
     const order =
       await findOrderByTransaction(
         body.context.transaction_id
@@ -581,7 +581,7 @@ router.post("/confirm", async (req, res) => {
 // REPLACE router.post("/status", ...) with:
 router.post("/status", async (req, res) => {
   const body = req.body as BecknBody;
-  await ackAfterWork(res, "status", async () => {
+  await ackAfterWork(res, "status", body.context, async () => {
     console.log("========== STATUS REQUEST ==========");
     const order = await findOrderByTransaction(body.context.transaction_id);
     if (order) {
@@ -621,7 +621,7 @@ router.post("/status", async (req, res) => {
 // REPLACE router.post("/cancel", ...) with:
 router.post("/cancel", async (req, res) => {
   const body = req.body as BecknBody;
-  ack(res);
+  ack(res, body.context);
   try {
     console.log("========== CANCEL REQUEST ==========");
     console.log(JSON.stringify(body, null, 2));
@@ -726,7 +726,7 @@ router.post("/cancel", async (req, res) => {
 // REPLACE router.post("/update", ...) with:
 router.post("/update", async (req, res) => {
   const body = req.body as BecknBody;
-  ack(res);
+  ack(res, body.context);
   try {
     console.log("========== UPDATE REQUEST ==========");
     console.log(JSON.stringify(body, null, 2));
@@ -911,7 +911,7 @@ router.post("/update", async (req, res) => {
 // REPLACE router.post("/track", ...) with:
 router.post("/track", async (req, res) => {
   const body = req.body as BecknBody;
-  await ackAfterWork(res, "track", async () => {
+  await ackAfterWork(res, "track", body.context, async () => {
     const order = await findOrderByTransaction(body.context.transaction_id);
     if (order) {
       const context = replyContext(body.context, "on_track");
@@ -929,7 +929,7 @@ router.post("/track", async (req, res) => {
 
 router.post("/info", async (req, res) => {
   const body = req.body as BecknBody;
-  await ackAfterWork(res, "info", async () => {
+  await ackAfterWork(res, "info", body.context, async () => {
     const order = await findOrderByTransaction(body.context.transaction_id);
     if (!order) {
       console.log(`[info] No order found for transaction: ${body.context.transaction_id}`);
