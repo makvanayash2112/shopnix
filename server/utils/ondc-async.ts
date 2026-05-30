@@ -10,9 +10,11 @@ import { logOndcBpp } from "./ondc-debug";
 export async function ackAfterWork(
   res: Response,
   label: string,
-  work: () => Promise<void>,
-  context?: import("./beckn").BecknContext
+  arg3: import("./beckn").BecknContext | undefined | (() => Promise<void>),
+  arg4?: () => Promise<void>
 ): Promise<void> {
+  const context = typeof arg3 === "function" ? undefined : arg3;
+  const work = typeof arg3 === "function" ? arg3 : arg4!;
   const start = Date.now();
   // Send ACK immediately for Vercel (before work, to avoid timeout)
   res.status(200).json(buildAckResponse(context));

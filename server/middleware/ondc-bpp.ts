@@ -271,7 +271,7 @@ export async function logOndcBppIncoming(
       .json(
         buildNackResponse({
           message: "Internal Server Error",
-        }, body?.context)
+        }, req.body?.context)
       );
   }
 }
