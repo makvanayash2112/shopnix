@@ -224,14 +224,14 @@ router.patch("/:id/rto-cancel", async (req: AuthRequest, res) => {
   });
   if (!order) return sendError(res, "Order not found", 404);
 
-  // Only allow RTO cancel for out-for-delivery orders and ensure order is not already returned or cancelled
+  // Only allow RTO cancel for out-for-delivery orders and ensure order is not already cancelled or returned
   if (
     (order.fulfillment?.state !== "Out-for-delivery" && order.fulfillment?.state !== "Delivering") ||
     ["Cancelled", "Returned", "Return completed"].includes(order.status)
   ) {
     return sendError(
       res,
-      `Cannot initiate RTO for order in status: ${order.fulfillment?.state}. Only allowed for Out-for-delivery or Delivering orders.`,
+      `Cannot initiate RTO for order in status: ${order.status || order.fulfillment?.state}. Only allowed for Out-for-delivery or Delivering orders that are not already cancelled or returned.`,
       400
     );
   }
@@ -247,12 +247,7 @@ router.patch("/:id/rto-cancel", async (req: AuthRequest, res) => {
 
     if (!updatedOrder) return sendError(res, "Failed to initiate RTO", 500);
 
-    // Set final cancelled status and fulfillment state
-    updatedOrder.status = "Cancelled";
-    updatedOrder.fulfillment = updatedOrder.fulfillment || {} as any;
-    updatedOrder.fulfillment.state = finalState ?? "RTO-Delivered";
-
-    // Notify BAP of RTO cancellation (on_cancel)
+    // Immediately send on_cancel after RTO initiation (order is in Return-in-progress state)
     if (updatedOrder.becknContext) {
       const { replyContext } = await import("../utils/beckn");
       const { postToBap } = await import("../services/ondc/callback.service");
@@ -263,6 +258,11 @@ router.patch("/:id/rto-cancel", async (req: AuthRequest, res) => {
       );
       void postToBap(cancelContext, "on_cancel", buildOrderMessage(updatedOrder, { action: "on_cancel", flow: "rto" }));
     }
+
+    // Set final cancelled status and fulfillment state for on_status
+    updatedOrder.status = "Cancelled";
+    updatedOrder.fulfillment = updatedOrder.fulfillment || {} as any;
+    updatedOrder.fulfillment.state = finalState ?? "RTO-Delivered";
 
     // Immediately send final on_status after cancellation
     if (updatedOrder.becknContext) {
