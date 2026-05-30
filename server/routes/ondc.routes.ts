@@ -489,7 +489,7 @@ router.post("/init", async (req, res) => {
     await postToBap(
       context,
       "on_init",
-      buildOrderMessage(order)
+      buildOrderMessage(order, { action: "on_init" })
     );
   });
 });
@@ -554,7 +554,7 @@ router.post("/confirm", async (req, res) => {
     await postToBap(
       context,
       "on_confirm",
-      buildOrderMessage(order)
+      buildOrderMessage(order, { action: "on_confirm" })
     );
   });
 });
@@ -587,7 +587,7 @@ router.post("/status", async (req, res) => {
     if (order) {
       console.log(`[status] Found order: ${order.orderId}, state: ${order.fulfillment?.state}`);
       const context = replyContext(body.context, "on_status");
-      await postToBap(context, "on_status", buildOrderMessage(order));
+      await postToBap(context, "on_status", buildOrderMessage(order, { action: "on_status" }));
     } else {
       console.log(`[status] No order found for transaction: ${body.context.transaction_id}`);
     }
@@ -648,7 +648,7 @@ router.post("/cancel", async (req, res) => {
       console.log(`[cancel] NON-CANCELLABLE: Order ${order.orderId} in state ${order.fulfillment?.state}`);
       const context = replyContext(body.context, "on_cancel");
       await postToBap(context, "on_cancel", {
-        ...buildOrderMessage(order),
+        ...buildOrderMessage(order, { action: "on_cancel" }),
         error: {
           type: "DOMAIN-ERROR",
           code: "40006",
@@ -695,7 +695,7 @@ router.post("/cancel", async (req, res) => {
     await order.save();
     console.log(`[cancel] Order cancelled: ${order.orderId}, reason: ${reasonId}, RTO: ${isRtoCancel}`);
     const context = replyContext(body.context, "on_cancel");
-    await postToBap(context, "on_cancel", buildOrderMessage(order));
+    await postToBap(context, "on_cancel", buildOrderMessage(order, { action: "on_cancel", flow: isRtoCancel ? "rto" : "full-cancel" }));
   } catch (err) {
     console.error("[cancel] Error:", err);
   }
@@ -781,7 +781,7 @@ router.post("/update", async (req, res) => {
           const updatedOrder = await partialCancelOrder(body.context.transaction_id, cancelItems);
           if (updatedOrder) {
             console.log(`[update] Partial cancel done for order: ${updatedOrder.orderId}`);
-            await postToBap(context, "on_update", buildOrderMessage(updatedOrder));
+            await postToBap(context, "on_update", buildOrderMessage(updatedOrder, { action: "on_update", flow: "partial-cancel" }));
           }
         } catch (err) {
           console.error("[update] Partial cancel error:", err);
@@ -847,7 +847,7 @@ router.post("/update", async (req, res) => {
           );
           if (updatedOrder) {
             console.log(`[update] Return initiated for order: ${updatedOrder.orderId}, type: ${returnType}`);
-            await postToBap(context, "on_update", buildOrderMessage(updatedOrder));
+            await postToBap(context, "on_update", buildOrderMessage(updatedOrder, { action: "on_update", flow: "return" }));
           }
         } catch (err) {
           console.error("[update] Return processing error:", err);
@@ -865,7 +865,7 @@ router.post("/update", async (req, res) => {
           const updatedOrder = await merchantFullCancelOrder(body.context.transaction_id, reasonId, reasonDesc, true);
           if (updatedOrder) {
             console.log(`[update] Full cancel done for order: ${updatedOrder.orderId}`);
-            await postToBap(context, "on_update", buildOrderMessage(updatedOrder));
+            await postToBap(context, "on_update", buildOrderMessage(updatedOrder, { action: "on_update", flow: "full-cancel" }));
           }
         } catch (err) {
           console.error("[update] Merchant full cancel error:", err);
@@ -875,7 +875,7 @@ router.post("/update", async (req, res) => {
     }
 
     // Default: echo back current order state
-    await postToBap(context, "on_update", buildOrderMessage(order));
+    await postToBap(context, "on_update", buildOrderMessage(order, { action: "on_update" }));
   } catch (err) {
     console.error("[update] Error:", err);
   }
@@ -936,7 +936,7 @@ router.post("/info", async (req, res) => {
       return;
     }
     const context = replyContext(body.context, "on_info");
-    await postToBap(context, "on_info", buildOrderMessage(order));
+    await postToBap(context, "on_info", buildOrderMessage(order, { action: "on_info" }));
   });
 });
 

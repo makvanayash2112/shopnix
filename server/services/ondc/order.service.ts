@@ -233,7 +233,7 @@ export async function initiateRtoCancel(
   };
 
   order.status = "Cancelled";
-  order.fulfillment.state = "Return-in-progress";
+  order.fulfillment.state = "Return-in-progress"; // Set it to Return-in-progress internally so we know it's RTO, order-payload.ts maps it to Cancelled for BAP.
   order.cancellationReasonId = reasonId;
   order.cancellationReasonDesc = reasonDesc;
 

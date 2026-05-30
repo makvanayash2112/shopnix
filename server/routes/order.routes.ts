@@ -96,7 +96,7 @@ router.patch("/:id/status", async (req: AuthRequest, res) => {
       order.becknContext as unknown as BecknContext,
       "on_status"
     );
-    void postToBap(context, "on_status", buildOrderMessage(order));
+    void postToBap(context, "on_status", buildOrderMessage(order, { action: "on_status" }));
   }
   return sendSuccess(res, order, 200, `Order updated to ${status}`);
 });
@@ -145,7 +145,7 @@ router.patch("/:id/partial-cancel", async (req: AuthRequest, res) => {
         (updatedOrder.becknContext as unknown) as import("../utils/beckn").BecknContext,
         "on_update"
       );
-      void postToBap(context, "on_update", buildOrderMessage(updatedOrder));
+      void postToBap(context, "on_update", buildOrderMessage(updatedOrder, { action: "on_update", flow: "partial-cancel" }));
     }
 
     return sendSuccess(res, updatedOrder, 200, "Partial cancellation applied");
@@ -252,7 +252,7 @@ router.patch("/:id/rto-cancel", async (req: AuthRequest, res) => {
         (updatedOrder.becknContext as unknown) as import("../utils/beckn").BecknContext,
         "on_cancel"
       );
-      void postToBap(context, "on_cancel", buildOrderMessage(updatedOrder));
+      void postToBap(context, "on_cancel", buildOrderMessage(updatedOrder, { action: "on_cancel", flow: "rto" }));
     }
 
     return sendSuccess(res, updatedOrder, 200, "RTO cancellation initiated (Flow 3B)");
@@ -296,12 +296,78 @@ router.patch("/:id/rto-status", async (req: AuthRequest, res) => {
         (updatedOrder.becknContext as unknown) as import("../utils/beckn").BecknContext,
         "on_status"
       );
-      void postToBap(context, "on_status", buildOrderMessage(updatedOrder));
+      void postToBap(context, "on_status", buildOrderMessage(updatedOrder, { action: "on_status", flow: "rto" }));
     }
 
     return sendSuccess(res, updatedOrder, 200, `RTO status updated to: ${status}`);
   } catch (err) {
     return sendError(res, err instanceof Error ? err.message : "RTO status update failed", 400);
+  }
+});
+
+// ADD: Update Return Status — Flow 4A/4B (Return_Initiated -> Return_Approved -> Return_Picked -> Return_Delivered)
+router.patch("/:id/return-status", async (req: AuthRequest, res) => {
+  const { status, sellerNote } = req.body as {
+    status?: "approved" | "picked-up" | "completed";
+    sellerNote?: string;
+  };
+
+  if (!status || !["approved", "picked-up", "completed"].includes(status)) {
+    return sendError(res, "Invalid return status. Must be: approved, picked-up, or completed");
+  }
+
+  const order = await Order.findOne({
+    _id: req.params.id,
+    sellerId: req.user!.sellerId,
+  });
+  if (!order) return sendError(res, "Order not found", 404);
+
+  if (!order.returnItems || order.returnItems.length === 0) {
+    return sendError(res, "No return items found for this order", 404);
+  }
+
+  try {
+    const now = new Date();
+    order.returnInfo = order.returnInfo || {};
+    order.returnInfo.status = status;
+    if (sellerNote) order.returnInfo.sellerNote = sellerNote;
+
+    if (status === "approved") {
+      order.status = "Return-Approved";
+    } else if (status === "completed") {
+      order.status = "Returned";
+      order.returnInfo.completedAt = now;
+      // Restock returned items
+      const { restockOrderItems } = await import("../services/order-workflow.service");
+      await restockOrderItems(order);
+    }
+
+    // Update individual return items
+    order.returnItems.forEach(ri => {
+      ri.status = status;
+      if (status === "approved") ri.approvedAt = now;
+      if (status === "completed") ri.completedAt = now;
+    });
+
+    order.markModified("returnInfo");
+    order.markModified("returnItems");
+    await order.save();
+
+    // Notify BAP of return status update via on_update
+    if (order.becknContext) {
+      const { replyContext } = await import("../utils/beckn");
+      const { postToBap } = await import("../services/ondc/callback.service");
+      const { buildOrderMessage } = await import("../services/ondc/order.service");
+      const context = replyContext(
+        (order.becknContext as unknown) as import("../utils/beckn").BecknContext,
+        "on_update"
+      );
+      void postToBap(context, "on_update", buildOrderMessage(order, { action: "on_update", flow: "return" }));
+    }
+
+    return sendSuccess(res, order, 200, `Return status updated to: ${status}`);
+  } catch (err) {
+    return sendError(res, err instanceof Error ? err.message : "Return status update failed", 400);
   }
 });
 

@@ -19,7 +19,7 @@ export interface IReturnInfo {
   requestedAt?: Date;
   approvedAt?: Date;
   completedAt?: Date;
-  status?: "pending" | "approved" | "completed" | "rejected";
+  status?: "pending" | "approved" | "picked-up" | "completed" | "rejected";
   sellerNote?: string;
 }
 
@@ -110,7 +110,7 @@ export interface IReturnItem {
   requestedAt?: Date;
   approvedAt?: Date;
   completedAt?: Date;
-  status?: "pending" | "approved" | "completed" | "rejected";
+  status?: "pending" | "approved" | "picked-up" | "completed" | "rejected";
 }
 
 export interface IIgmIssue {
@@ -207,7 +207,7 @@ const orderSchema = new Schema<IOrder>(
       completedAt: Date,
       status: {
         type: String,
-        enum: ["pending", "approved", "completed", "rejected"],
+        enum: ["pending", "approved", "picked-up", "completed", "rejected"],
       },
       sellerNote: String,
     },
@@ -246,7 +246,7 @@ const orderSchema = new Schema<IOrder>(
         completedAt: { type: Date },
         status: {
           type: String,
-          enum: ["pending", "approved", "completed", "rejected"],
+          enum: ["pending", "approved", "picked-up", "completed", "rejected"],
         },
       },
     ],

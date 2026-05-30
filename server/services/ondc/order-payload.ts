@@ -66,7 +66,8 @@ function normalizeBecknOrderState(status?: string, fulfillmentState?: string): s
     fState === "Agent-assigned" ||
     fState === "Order-picked-up" ||
     fState === "Out-for-delivery" ||
-    fState === "Delivering"
+    fState === "Delivering" ||
+    fState === "Return-in-progress"
   ) {
     return "In-progress";
   }
@@ -469,7 +470,12 @@ export function buildSelectMessage(
 
 
 
-export function buildOrderMessage(order: IOrder) {
+export interface OrderMessageContext {
+  action?: "on_status" | "on_cancel" | "on_update" | "on_search" | "on_select" | "on_init" | "on_confirm" | "on_track" | "on_info" | string;
+  flow?: "rto" | "return" | "partial-cancel" | "full-cancel" | string;
+}
+
+export function buildOrderMessage(order: IOrder, contextOpts?: OrderMessageContext) {
   const providerId =
     typeof order.becknContext?.providerId === "string"
       ? order.becknContext.providerId
@@ -711,7 +717,7 @@ export function buildOrderMessage(order: IOrder) {
       "@ondc/org/TAT": "PT24H",
       state: {
         descriptor: {
-          code: order.fulfillment?.state || "Pending",
+          code: order.fulfillment?.state === "Return-in-progress" ? "Cancelled" : (order.fulfillment?.state || "Pending"),
           short_desc: order.fulfillment?.state || "Pending",
         },
       },
@@ -782,10 +788,10 @@ export function buildOrderMessage(order: IOrder) {
   // Add RTO (Return to Origin) fulfillment for Flow 3B
   if (order.rtoInfo && order.rtoInfo.status) {
     const rtoStateMap: Record<string, string> = {
-      "initiated": "Initiated",
-      "picked-up": "Picked-up",
-      "delivered-to-origin": "Delivered-at-origin",
-      "completed": "Returned",
+      "initiated": "RTO-Initiated",
+      "picked-up": "RTO-Delivered", // or RTO-Picked-up, depending on doc
+      "delivered-to-origin": "RTO-Delivered",
+      "completed": "RTO-Delivered",
     };
     fulfillments.push({
       id: "RTO1",
@@ -794,7 +800,7 @@ export function buildOrderMessage(order: IOrder) {
       "@ondc/org/TAT": "PT72H",
       state: {
         descriptor: {
-          code: rtoStateMap[order.rtoInfo.status] || "Initiated",
+          code: rtoStateMap[order.rtoInfo.status] || "RTO-Initiated",
           short_desc: `Return to Origin: ${order.rtoInfo.reason || "Merchant initiated RTO"}`,
         },
       },
@@ -839,13 +845,20 @@ export function buildOrderMessage(order: IOrder) {
 
   // Add return fulfillment R1 for return flows
   if (returnItemIds.length > 0 || order.status === "Return-Initiated" || order.status === "Return-Requested" || order.status === "Return-Approved" || order.status === "Returned") {
+    
+    // Map internal return info status to ONDC specific codes
+    let returnCode = "Return_Initiated";
+    if (order.returnInfo?.status === "approved") returnCode = "Return_Approved";
+    if (order.returnInfo?.status === "picked-up") returnCode = "Return_Picked";
+    if (order.returnInfo?.status === "completed" || order.status === "Returned") returnCode = "Return_Delivered";
+
     fulfillments.push({
       id: "R1",
       type: "Return",
       tracking: false,
       state: {
         descriptor: {
-          code: order.status === "Returned" ? "Return-Delivered" : "Return-Initiated",
+          code: returnCode,
           short_desc: order.status,
         },
       },
