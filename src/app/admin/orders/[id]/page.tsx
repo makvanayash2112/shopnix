@@ -48,6 +48,22 @@ const SELLER_ACTIONS: Record<string, { status: string; label: string; variant?: 
   ],
 };
 
+// RTO Flow constants
+const RTO_REASONS: { value: string; label: string }[] = [
+  { value: "002", label: "002 - Item out of stock" },
+  { value: "004", label: "004 - Merchant not available" },
+  { value: "005", label: "005 - Out of stock" },
+  { value: "006", label: "006 - Customer request" },
+  { value: "007", label: "007 - Order failed" },
+  { value: "008", label: "008 - Payment failed" },
+  { value: "009", label: "009 - Merchant-initiated RTO" },
+];
+
+const RTO_FINAL_STATES: { value: string; label: string }[] = [
+  { value: "RTO-Delivered", label: "RTO-Delivered" },
+  { value: "RTO-Disposed", label: "RTO-Disposed" },
+];
+
 export default function OrderDetailPage() {
   const params = useParams();
   const id = params?.id as string;
@@ -95,7 +111,9 @@ export default function OrderDetailPage() {
   }
 
   async function handleRtoCancel() {
-    if (!rtoDesc.trim()) return alert("Please enter cancellation reason");
+    if (!rtoDesc.trim() || rtoDesc.trim().length < 10) {
+      return alert("Please provide a detailed cancellation reason (at least 10 characters).");
+    }
 
     setLoading(true);
     try {
@@ -103,9 +121,16 @@ export default function OrderDetailPage() {
         method: "PATCH",
         body: JSON.stringify({ reasonId: rtoReason, reasonDesc: rtoDesc, finalState: rtoFinalState }),
       });
+      // Refresh order data to reflect RTO info without full reload
+      const refreshed = await apiFetch<{ order: Order; nextStatuses: string[] }>(`/orders/${id}`);
+      setOrder(refreshed.order);
+      setNextStatuses(refreshed.nextStatuses);
       alert("RTO cancellation initiated. Order will be returned to origin.");
+      // Reset dialog state
       setShowRtoDialog(false);
-      window.location.reload();
+      setRtoDesc("");
+      setRtoReason("002");
+      setRtoFinalState("RTO-Delivered");
     } catch (err: any) {
       alert(err.message || "Failed to initiate RTO");
     } finally {
@@ -282,7 +307,7 @@ export default function OrderDetailPage() {
       </Card>
 
       {/* RTO Cancel Card - Flow 3B */}
-      {(order.fulfillment?.state === "Out-for-delivery" || order.fulfillment?.state === "Delivering") && !["Cancelled", "Returned", "Return completed"].includes(order.status) && (
+      {(order.fulfillment?.state === "Out-for-delivery" || order.fulfillment?.state === "Delivering") && !["Cancelled", "Returned", "Return completed", "RTO-Delivered", "RTO-Disposed"].includes(order.status) && (
         <Card title="Return to Origin (RTO) - Flow 3B">
           <p className="mb-4 text-sm text-slate-600">
             Initiate return to origin for out-for-delivery orders. All items will be restocked.
@@ -296,20 +321,18 @@ export default function OrderDetailPage() {
               Initiate RTO Cancel
             </Button>
           ) : (
-            <div className="space-y-3 bg-slate-50 p-4 rounded-md">
+            <div className="space-y-3 bg-slate-50 dark:bg-gray-800 p-4 rounded-md transition-opacity duration-300 opacity-100">
               <p className="font-medium text-sm">Cancel Reason</p>
               <select
                 className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
                 value={rtoReason}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRtoReason(e.target.value)}
               >
-                <option value="002">002 - Item out of stock</option>
-                <option value="004">004 - Merchant not available</option>
-                <option value="005">005 - Out of stock</option>
-                <option value="006">006 - Customer request</option>
-                <option value="007">007 - Order failed</option>
-                <option value="008">008 - Payment failed</option>
-                <option value="009">009 - Merchant-initiated RTO</option>
+                {RTO_REASONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
               </select>
               <div className="mt-2">
                 <p className="font-medium text-xs text-slate-500 mb-1">Description</p>
@@ -325,15 +348,18 @@ export default function OrderDetailPage() {
                   value={rtoFinalState}
                   onChange={(e) => setRtoFinalState(e.target.value as any)}
                 >
-                  <option value="RTO-Delivered">RTO-Delivered</option>
-                  <option value="RTO-Disposed">RTO-Disposed</option>
+                  {RTO_FINAL_STATES.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
                 </select>
                 <Button
                   variant="danger"
                   onClick={handleRtoCancel}
                   disabled={loading}
                 >
-                  Confirm RTO Cancellation
+                  {loading ? "Processing..." : "Confirm RTO Cancellation"}
                 </Button>
                 <Button
                   onClick={() => {
