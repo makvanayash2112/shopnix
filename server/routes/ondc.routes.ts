@@ -641,8 +641,9 @@ router.post("/cancel", async (req, res) => {
     const reasonId = cancelMsg?.cancellation_reason_id || "004";
     const reasonDesc = cancelMsg?.descriptor?.short_desc || "Cancelled";
 
-    // Flow 7: Non-Cancellable — orders in Out-for-delivery or Delivered state
-    const nonCancellableStates = ["Out-for-delivery", "Order-delivered", "Delivered"];
+    // Flow 7: Non-Cancellable — only AFTER delivery (Order-delivered, Delivered)
+    // Allow Flow 3B RTO cancellation for Out-for-delivery state
+    const nonCancellableStates = ["Order-delivered", "Delivered"];
     if (nonCancellableStates.includes(order.fulfillment?.state || "")) {
       console.log(`[cancel] NON-CANCELLABLE: Order ${order.orderId} in state ${order.fulfillment?.state}`);
       const context = replyContext(body.context, "on_cancel");
@@ -658,13 +659,31 @@ router.post("/cancel", async (req, res) => {
       return;
     }
 
-    // Full cancel (buyer or merchant full)
-    order.status = "Cancelled";
-    order.fulfillment.state = "Cancelled";
-    order.cancellationReasonId = reasonId;
-    order.cancellationReasonDesc = reasonDesc;
+    // Flow 3B: Merchant Full Cancel with RTO (Return to Origin)
+    // When order is out-for-delivery, cancellation triggers RTO flow
+    const isRtoCancel = order.fulfillment?.state === "Out-for-delivery";
+    if (isRtoCancel) {
+      console.log(`[cancel] Flow 3B RTO: Initiating Return to Origin for order ${order.orderId}`);
+      order.rtoInfo = {
+        reason: reasonDesc,
+        initiatedAt: new Date(),
+        status: "initiated",
+        notes: `Merchant initiated RTO cancel: ${reasonDesc}`,
+      };
+      order.status = "Cancelled";
+      order.fulfillment.state = "Return-in-progress"; // RTO fulfillment state
+      order.cancellationReasonId = reasonId;
+      order.cancellationReasonDesc = reasonDesc;
+      order.markModified("rtoInfo");
+    } else {
+      // Standard full cancel (before out-for-delivery)
+      order.status = "Cancelled";
+      order.fulfillment.state = "Cancelled";
+      order.cancellationReasonId = reasonId;
+      order.cancellationReasonDesc = reasonDesc;
+    }
 
-    // Restock all items
+    // Restock all items on cancellation
     for (const item of order.items) {
       if (item.productId) {
         await Product.findByIdAndUpdate(item.productId, {
@@ -674,7 +693,7 @@ router.post("/cancel", async (req, res) => {
     }
 
     await order.save();
-    console.log(`[cancel] Order cancelled: ${order.orderId}, reason: ${reasonId}`);
+    console.log(`[cancel] Order cancelled: ${order.orderId}, reason: ${reasonId}, RTO: ${isRtoCancel}`);
     const context = replyContext(body.context, "on_cancel");
     await postToBap(context, "on_cancel", buildOrderMessage(order));
   } catch (err) {

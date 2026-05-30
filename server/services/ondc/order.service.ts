@@ -204,7 +204,80 @@ export async function partialCancelOrder(
   return order;
 }
 
-// ADD: Flow 3B — Merchant Full Cancel with RTO
+// ADD: Flow 3B — Merchant Full Cancel with RTO (Return to Origin)
+// Allows cancellation of out-for-delivery orders
+export async function initiateRtoCancel(
+  transactionId: string,
+  reasonId: string,
+  reasonDesc: string,
+  trackingId?: string
+): Promise<IOrder | null> {
+  const order = await Order.findOne({ transactionId }).sort({ createdAt: -1 });
+  if (!order) return null;
+
+  // Only allow RTO for orders that are out-for-delivery or in delivery
+  const allowedStates = ["Out-for-delivery", "Delivering"];
+  if (!allowedStates.includes(order.fulfillment?.state || "")) {
+    throw new Error(
+      `Cannot initiate RTO for order in state: ${order.fulfillment?.state}. Only allowed for: ${allowedStates.join(", ")}`
+    );
+  }
+
+  const now = new Date();
+  order.rtoInfo = {
+    reason: reasonDesc,
+    initiatedAt: now,
+    status: "initiated",
+    trackingId: trackingId || `RTO-${order.orderId}`,
+    notes: `Merchant initiated RTO cancel: ${reasonDesc}`,
+  };
+
+  order.status = "Cancelled";
+  order.fulfillment.state = "Return-in-progress";
+  order.cancellationReasonId = reasonId;
+  order.cancellationReasonDesc = reasonDesc;
+
+  // Restock all items
+  for (const item of order.items) {
+    if (item.productId) {
+      await Product.findByIdAndUpdate(item.productId, {
+        $inc: { quantity: item.quantity },
+      });
+    }
+  }
+
+  order.markModified("rtoInfo");
+  await order.save();
+  return order;
+}
+
+// ADD: Flow 3B — Update RTO Status (when delivery agent picks up return)
+export async function updateRtoStatus(
+  transactionId: string,
+  newStatus: "picked-up" | "delivered-to-origin" | "completed",
+  notes?: string
+): Promise<IOrder | null> {
+  const order = await Order.findOne({ transactionId }).sort({ createdAt: -1 });
+  if (!order || !order.rtoInfo) return null;
+
+  if (newStatus === "picked-up") {
+    order.rtoInfo.pickedUpAt = new Date();
+  } else if (newStatus === "delivered-to-origin") {
+    order.rtoInfo.deliveredToOriginAt = new Date();
+  } else if (newStatus === "completed") {
+    order.rtoInfo.deliveredToOriginAt = order.rtoInfo.deliveredToOriginAt || new Date();
+  }
+
+  order.rtoInfo.status = newStatus;
+  if (notes) order.rtoInfo.notes = notes;
+
+  order.markModified("rtoInfo");
+  await order.save();
+  return order;
+}
+
+// ADD: Flow 3B — Merchant Full Cancel with RTO (Return to Origin)
+// Allows cancellation of out-for-delivery orders
 export async function merchantFullCancelOrder(
   transactionId: string,
   reasonId: string,
@@ -213,6 +286,11 @@ export async function merchantFullCancelOrder(
 ): Promise<IOrder | null> {
   const order = await Order.findOne({ transactionId }).sort({ createdAt: -1 });
   if (!order) return null;
+
+  // If rtoMode, use RTO flow instead
+  if (rtoMode && (order.fulfillment?.state === "Out-for-delivery" || order.fulfillment?.state === "Delivering")) {
+    return initiateRtoCancel(transactionId, reasonId, reasonDesc);
+  }
 
   order.status = "Cancelled";
   order.fulfillment.state = "Cancelled";
@@ -244,6 +322,7 @@ export async function merchantFullCancelOrder(
   await order.save();
   return order;
 }
+
 
 // ADD: Flow 4A/4B — Buyer Initiated Return (triggered by /update from BAP)
 export async function processReturnRequest(

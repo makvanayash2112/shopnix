@@ -779,6 +779,64 @@ export function buildOrderMessage(order: IOrder) {
     });
   }
 
+  // Add RTO (Return to Origin) fulfillment for Flow 3B
+  if (order.rtoInfo && order.rtoInfo.status) {
+    const rtoStateMap: Record<string, string> = {
+      "initiated": "Initiated",
+      "picked-up": "Picked-up",
+      "delivered-to-origin": "Delivered-at-origin",
+      "completed": "Returned",
+    };
+    fulfillments.push({
+      id: "RTO1",
+      type: "Return",
+      tracking: Boolean(order.rtoInfo.trackingId),
+      "@ondc/org/TAT": "PT72H",
+      state: {
+        descriptor: {
+          code: rtoStateMap[order.rtoInfo.status] || "Initiated",
+          short_desc: `Return to Origin: ${order.rtoInfo.reason || "Merchant initiated RTO"}`,
+        },
+      },
+      start: {
+        contact: { name: contact.name, phone: contact.phone, email: contact.email },
+        person: { name: contact.name },
+        time: {
+          timestamp: order.rtoInfo.initiatedAt?.toISOString?.() || new Date().toISOString(),
+        },
+        location: {
+          id: `${locationId}-customer`,
+          descriptor: { name: "Customer Location (RTO Pickup)" },
+          gps: order.gps || "12.971599,77.594566",
+          address,
+        },
+      },
+      end: {
+        contact: sellerContact,
+        person: { name: sellerContact.name },
+        time: {
+          timestamp: order.rtoInfo.deliveredToOriginAt?.toISOString?.() || new Date().toISOString(),
+        },
+        location: {
+          id: locationId,
+          descriptor: { name: "Store (RTO Delivery)" },
+          gps: order.gps || "12.971599,77.594566",
+          address,
+        },
+      },
+      tags: [
+        {
+          code: "rto_request",
+          list: [
+            { code: "id", value: order.rtoInfo.trackingId || `RTO-${order.orderId}` },
+            { code: "reason", value: order.rtoInfo.reason || "Merchant initiated" },
+            { code: "initiated_by", value: resolvedProviderId },
+          ],
+        },
+      ],
+    });
+  }
+
   // Add return fulfillment R1 for return flows
   if (returnItemIds.length > 0 || order.status === "Return-Initiated" || order.status === "Return-Requested" || order.status === "Return-Approved" || order.status === "Returned") {
     fulfillments.push({

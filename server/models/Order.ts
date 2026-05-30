@@ -23,6 +23,16 @@ export interface IReturnInfo {
   sellerNote?: string;
 }
 
+export interface IRtoInfo {
+  reason?: string;
+  initiatedAt?: Date;
+  pickedUpAt?: Date;
+  deliveredToOriginAt?: Date;
+  status?: "initiated" | "picked-up" | "delivered-to-origin" | "completed";
+  trackingId?: string;
+  notes?: string;
+}
+
 export interface IOrder extends Document {
   sellerId: mongoose.Types.ObjectId;
   orderId: string;
@@ -62,6 +72,7 @@ export interface IOrder extends Document {
   };
   deliveredAt?: Date;
   returnInfo?: IReturnInfo;
+  rtoInfo?: IRtoInfo;                      // For Flow 3B: Return to Origin (cancel out-for-delivery)
   cancelledItems?: ICancelledItem[];       // For Flow 3A partial cancel
   returnItems?: IReturnItem[];             // For Flow 4A/4B return items
   cancellationReasonId?: string;           // ONDC reason code e.g. "002"
@@ -199,6 +210,18 @@ const orderSchema = new Schema<IOrder>(
         enum: ["pending", "approved", "completed", "rejected"],
       },
       sellerNote: String,
+    },
+    rtoInfo: {
+      reason: { type: String },
+      initiatedAt: { type: Date },
+      pickedUpAt: { type: Date },
+      deliveredToOriginAt: { type: Date },
+      status: {
+        type: String,
+        enum: ["initiated", "picked-up", "delivered-to-origin", "completed"],
+      },
+      trackingId: { type: String },
+      notes: { type: String },
     },
     cancelledItems: [
       {

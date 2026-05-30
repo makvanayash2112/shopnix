@@ -58,6 +58,9 @@ export default function OrderDetailPage() {
   const [cancelReason, setCancelReason] = useState("002");
   const [igmResolution, setIgmResolution] = useState("");
   const [igmAction, setIgmAction] = useState<"REFUND" | "REPLACEMENT" | "CANCEL" | "NO_ACTION">("REFUND");
+  const [rtoReason, setRtoReason] = useState("004");
+  const [rtoDesc, setRtoDesc] = useState("");
+  const [showRtoDialog, setShowRtoDialog] = useState(false);
 
   useEffect(() => {
     apiFetch<{ order: Order; nextStatuses: string[] }>(`/orders/${id}`).then(
@@ -85,6 +88,25 @@ export default function OrderDetailPage() {
       window.location.reload();
     } catch (err: any) {
       alert(err.message || "Failed to cancel");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function handleRtoCancel() {
+    if (!rtoDesc.trim()) return alert("Please enter cancellation reason");
+
+    setLoading(true);
+    try {
+      await apiFetch(`/orders/${id}/rto-cancel`, {
+        method: "PATCH",
+        body: JSON.stringify({ reasonId: rtoReason, reasonDesc: rtoDesc }),
+      });
+      alert("RTO cancellation initiated. Order will be returned to origin.");
+      setShowRtoDialog(false);
+      window.location.reload();
+    } catch (err: any) {
+      alert(err.message || "Failed to initiate RTO");
     } finally {
       setLoading(false);
     }
@@ -258,7 +280,96 @@ export default function OrderDetailPage() {
         )}
       </Card>
 
+      {/* RTO Cancel Card - Flow 3B */}
+      {(order.fulfillment?.state === "Out-for-delivery" || order.fulfillment?.state === "Delivering") && order.status !== "Cancelled" && (
+        <Card title="Return to Origin (RTO) - Flow 3B">
+          <p className="mb-4 text-sm text-slate-600">
+            Initiate return to origin for out-for-delivery orders. All items will be restocked.
+          </p>
+          {!showRtoDialog ? (
+            <Button
+              variant="danger"
+              onClick={() => setShowRtoDialog(true)}
+              disabled={loading}
+            >
+              Initiate RTO Cancel
+            </Button>
+          ) : (
+            <div className="space-y-3 bg-slate-50 p-4 rounded-md">
+              <p className="font-medium text-sm">Cancel Reason</p>
+              <select
+                className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-slate-950"
+                value={rtoReason}
+                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setRtoReason(e.target.value)}
+              >
+                <option value="002">002 - Item out of stock</option>
+                <option value="004">004 - Merchant not available</option>
+                <option value="005">005 - Out of stock</option>
+                <option value="006">006 - Customer request</option>
+                <option value="007">007 - Order failed</option>
+                <option value="008">008 - Payment failed</option>
+                <option value="009">009 - Merchant-initiated RTO</option>
+              </select>
+              <div className="mt-2">
+                <p className="font-medium text-xs text-slate-500 mb-1">Description</p>
+                <Input
+                  placeholder="Why are you cancelling this delivery..."
+                  value={rtoDesc}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => setRtoDesc(e.target.value)}
+                />
+              </div>
+              <div className="flex gap-2 mt-4">
+                <Button
+                  variant="danger"
+                  onClick={handleRtoCancel}
+                  disabled={loading}
+                >
+                  Confirm RTO Cancellation
+                </Button>
+                <Button
+                  onClick={() => {
+                    setShowRtoDialog(false);
+                    setRtoDesc("");
+                  }}
+                  disabled={loading}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          )}
+          {order.rtoInfo && (
+            <div className="mt-4 pt-4 border-t">
+              <p className="font-medium text-sm mb-2">RTO Status: {order.rtoInfo.status}</p>
+              <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                <div>
+                  <dt className="text-slate-500">Initiated</dt>
+                  <dd>{new Date(order.rtoInfo.initiatedAt!).toLocaleString()}</dd>
+                </div>
+                {order.rtoInfo.pickedUpAt && (
+                  <div>
+                    <dt className="text-slate-500">Picked Up</dt>
+                    <dd>{new Date(order.rtoInfo.pickedUpAt).toLocaleString()}</dd>
+                  </div>
+                )}
+                {order.rtoInfo.deliveredToOriginAt && (
+                  <div>
+                    <dt className="text-slate-500">Delivered to Origin</dt>
+                    <dd>{new Date(order.rtoInfo.deliveredToOriginAt).toLocaleString()}</dd>
+                  </div>
+                )}
+                <div className="sm:col-span-2">
+                  <dt className="text-slate-500">Reason</dt>
+                  <dd>{order.rtoInfo.reason}</dd>
+                </div>
+              </dl>
+            </div>
+          )}
+        </Card>
+      )}
+
       {/* IGM Management Card */}
+
       {order.igmIssues && order.igmIssues.length > 0 && (
         <Card title="Issue & Grievance (IGM)">
           <div className="space-y-4 text-sm">

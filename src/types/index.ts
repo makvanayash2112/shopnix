@@ -127,6 +127,15 @@ export interface Order {
     status?: string;
     sellerNote?: string;
   };
+  rtoInfo?: {
+    reason?: string;
+    initiatedAt?: string;
+    pickedUpAt?: string;
+    deliveredToOriginAt?: string;
+    status?: string;
+    trackingId?: string;
+    notes?: string;
+  };
   cancelledItems?: {
     ondcItemId: string;
     name: string;
