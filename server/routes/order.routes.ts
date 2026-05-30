@@ -261,7 +261,7 @@ router.patch("/:id/rto-cancel", async (req: AuthRequest, res) => {
   }
 });
 
-// ADD: Update RTO Status — when delivery partner picks up return
+// ADD: Update RTO Status — when delivery partner picks up
 router.patch("/:id/rto-status", async (req: AuthRequest, res) => {
   const { status, notes } = req.body as {
     status?: "picked-up" | "delivered-to-origin" | "completed";
@@ -282,27 +282,35 @@ router.patch("/:id/rto-status", async (req: AuthRequest, res) => {
     return sendError(res, "No RTO info found for this order", 404);
   }
 
-  try {
-    const { updateRtoStatus } = await import("../services/ondc/order.service");
-    const updatedOrder = await updateRtoStatus(order.transactionId, status, notes);
-    if (!updatedOrder) return sendError(res, "Failed to update RTO status", 500);
+  // Update RTO status via service
+  const { updateRtoStatus } = await import("../services/ondc/order.service");
+  const updatedOrder = await updateRtoStatus(order.transactionId, status, notes);
+  if (!updatedOrder) return sendError(res, "Failed to update RTO status", 500);
 
-    // Notify BAP of RTO status update
-    if (updatedOrder.becknContext) {
-      const { replyContext } = await import("../utils/beckn");
-      const { postToBap } = await import("../services/ondc/callback.service");
-      const { buildOrderMessage } = await import("../services/ondc/order.service");
-      const context = replyContext(
-        (updatedOrder.becknContext as unknown) as import("../utils/beckn").BecknContext,
-        "on_status"
-      );
-      void postToBap(context, "on_status", buildOrderMessage(updatedOrder, { action: "on_status", flow: "rto" }));
-    }
-
-    return sendSuccess(res, updatedOrder, 200, `RTO status updated to: ${status}`);
-  } catch (err) {
-    return sendError(res, err instanceof Error ? err.message : "RTO status update failed", 400);
+  // If RTO completed, set order status and fulfillment state
+  if (status === "completed") {
+    order.status = "Cancelled";
+    order.fulfillment = order.fulfillment || {} as any;
+    // Use notes as fulfillment state if provided, otherwise default to RTO-Delivered
+    order.fulfillment.state = notes ?? "RTO-Delivered";
   }
+
+  // Persist changes
+  await order.save();
+
+  // Send unsolicited on_status to BAP
+  if (order.becknContext) {
+    const { replyContext } = await import("../utils/beckn");
+    const { postToBap } = await import("../services/ondc/callback.service");
+    const { buildOrderMessage } = await import("../services/ondc/order.service");
+    const context = replyContext(
+      (order.becknContext as unknown) as import("../utils/beckn").BecknContext,
+      "on_status"
+    );
+    void postToBap(context, "on_status", buildOrderMessage(order, { action: "on_status", flow: "rto" }));
+  }
+
+  return sendSuccess(res, order, 200, `RTO status updated to: ${status}`);
 });
 
 // ADD: Update Return Status — Flow 4A/4B (Return_Initiated -> Return_Approved -> Return_Picked -> Return_Delivered)
@@ -353,7 +361,7 @@ router.patch("/:id/return-status", async (req: AuthRequest, res) => {
     order.markModified("returnItems");
     await order.save();
 
-    // Notify BAP of return status update via on_update
+    // Notify BAP of status update
     if (order.becknContext) {
       const { replyContext } = await import("../utils/beckn");
       const { postToBap } = await import("../services/ondc/callback.service");
