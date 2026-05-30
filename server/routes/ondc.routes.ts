@@ -536,10 +536,15 @@ router.post("/confirm", async (req, res) => {
         return String(raw);
       }
 
+      const rawBillingCreated = msgOrder.billing?.created_at;
+      const rawBillingUpdated = msgOrder.billing?.updated_at;
+
       order.becknContext = {
         ...(order.becknContext || {}),
-        confirm_order_created_at: normalizeTs(msgOrder.created_at),
-        confirm_order_updated_at: normalizeTs(msgOrder.updated_at),
+        billing_created_at: normalizeTs(rawBillingCreated) ?? order.becknContext?.billing_created_at ?? body.context.timestamp,
+        billing_updated_at: normalizeTs(rawBillingUpdated) ?? normalizeTs(rawBillingCreated) ?? body.context.timestamp,
+        confirm_order_created_at: normalizeTs(msgOrder.created_at) ?? body.context.timestamp,
+        confirm_order_updated_at: normalizeTs(msgOrder.updated_at) ?? body.context.timestamp,
       };
       order.markModified("becknContext");
     }
