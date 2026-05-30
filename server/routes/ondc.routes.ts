@@ -486,6 +486,16 @@ router.post("/init", async (req, res) => {
       "on_init"
     );
 
+    order.becknContext = {
+      ...(order.becknContext || {}),
+      init_order_created_at: context.timestamp,
+      init_order_updated_at: context.timestamp,
+      billing_created_at: context.timestamp,
+      billing_updated_at: context.timestamp,
+    };
+    order.markModified("becknContext");
+    await order.save();
+
     await postToBap(
       context,
       "on_init",
@@ -555,6 +565,16 @@ router.post("/confirm", async (req, res) => {
       body.context,
       "on_confirm"
     );
+
+    order.becknContext = {
+      ...(order.becknContext || {}),
+      confirm_order_created_at: context.timestamp,
+      confirm_order_updated_at: context.timestamp,
+      billing_created_at: context.timestamp,
+      billing_updated_at: context.timestamp,
+    };
+    order.markModified("becknContext");
+    await order.save();
 
     await postToBap(
       context,
