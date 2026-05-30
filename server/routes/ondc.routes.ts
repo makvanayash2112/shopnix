@@ -523,10 +523,23 @@ router.post("/confirm", async (req, res) => {
 
     const msgOrder = body.message?.order as BecknOrderMessage;
     if (msgOrder) {
+      function normalizeTs(raw: unknown): string | undefined {
+        if (!raw) return undefined;
+        if (typeof raw === "string") return raw;
+        if (raw instanceof Date) return raw.toISOString();
+        if (typeof raw === "object" && raw !== null) {
+          const r = raw as Record<string, unknown>;
+          const ts = r["timestamp"] ?? r["iso"] ?? r["value"];
+          if (typeof ts === "string") return ts;
+        }
+        if (typeof raw === "number") return new Date(raw).toISOString();
+        return String(raw);
+      }
+
       order.becknContext = {
         ...(order.becknContext || {}),
-        confirm_order_created_at: msgOrder.created_at,
-        confirm_order_updated_at: msgOrder.updated_at,
+        confirm_order_created_at: normalizeTs(msgOrder.created_at),
+        confirm_order_updated_at: normalizeTs(msgOrder.updated_at),
       };
       order.markModified("becknContext");
     }

@@ -488,12 +488,16 @@ export function buildOrderMessage(order: IOrder) {
   const paymentStatus = order.payment?.status || "NOT-PAID";
   const taxNumber = resolveTaxNumber(order);
 
-  const billingCreatedAt = typeof order.becknContext?.billing_created_at === "string"
-    ? order.becknContext.billing_created_at
-    : (order.createdAt?.toISOString?.() || new Date().toISOString());
-  const billingUpdatedAt = typeof order.becknContext?.billing_updated_at === "string"
-    ? order.becknContext.billing_updated_at
-    : billingCreatedAt;
+  const billingCreatedAt = typeof order.becknContext?.init_order_created_at === "string"
+    ? order.becknContext.init_order_created_at
+    : (typeof order.becknContext?.billing_created_at === "string"
+      ? order.becknContext.billing_created_at
+      : (order.createdAt?.toISOString?.() || new Date().toISOString()));
+  const billingUpdatedAt = typeof order.becknContext?.init_order_updated_at === "string"
+    ? order.becknContext.init_order_updated_at
+    : (typeof order.becknContext?.billing_updated_at === "string"
+      ? order.becknContext.billing_updated_at
+      : billingCreatedAt);
 
   const orderCreatedAt = typeof order.becknContext?.confirm_order_created_at === "string"
     ? order.becknContext.confirm_order_created_at
