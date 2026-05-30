@@ -211,10 +211,11 @@ router.patch("/:id/igm/:issueId", async (req: AuthRequest, res) => {
 // ADD: Merchant RTO (Return to Origin) cancel — Flow 3B
 // Allow cancellation of out-for-delivery orders with RTO tracking
 router.patch("/:id/rto-cancel", async (req: AuthRequest, res) => {
-  const { reasonId, reasonDesc, trackingId } = req.body as {
+  const { reasonId, reasonDesc, trackingId, finalState } = req.body as {
     reasonId?: string;
     reasonDesc?: string;
     trackingId?: string;
+    finalState?: string; // optional fulfillment state e.g., "RTO-Delivered" or "RTO-Disposed"
   };
 
   const order = await Order.findOne({
@@ -223,8 +224,11 @@ router.patch("/:id/rto-cancel", async (req: AuthRequest, res) => {
   });
   if (!order) return sendError(res, "Order not found", 404);
 
-  // Only allow RTO cancel for out-for-delivery orders
-  if (order.fulfillment?.state !== "Out-for-delivery" && order.fulfillment?.state !== "Delivering") {
+  // Only allow RTO cancel for out-for-delivery orders and ensure order is not already returned or cancelled
+  if (
+    (order.fulfillment?.state !== "Out-for-delivery" && order.fulfillment?.state !== "Delivering") ||
+    ["Cancelled", "Returned", "Return completed"].includes(order.status)
+  ) {
     return sendError(
       res,
       `Cannot initiate RTO for order in status: ${order.fulfillment?.state}. Only allowed for Out-for-delivery or Delivering orders.`,
@@ -243,19 +247,36 @@ router.patch("/:id/rto-cancel", async (req: AuthRequest, res) => {
 
     if (!updatedOrder) return sendError(res, "Failed to initiate RTO", 500);
 
-    // Notify BAP of RTO cancellation
+    // Set final cancelled status and fulfillment state
+    updatedOrder.status = "Cancelled";
+    updatedOrder.fulfillment = updatedOrder.fulfillment || {} as any;
+    updatedOrder.fulfillment.state = finalState ?? "RTO-Delivered";
+
+    // Notify BAP of RTO cancellation (on_cancel)
     if (updatedOrder.becknContext) {
       const { replyContext } = await import("../utils/beckn");
       const { postToBap } = await import("../services/ondc/callback.service");
       const { buildOrderMessage } = await import("../services/ondc/order.service");
-      const context = replyContext(
+      const cancelContext = replyContext(
         (updatedOrder.becknContext as unknown) as import("../utils/beckn").BecknContext,
         "on_cancel"
       );
-      void postToBap(context, "on_cancel", buildOrderMessage(updatedOrder, { action: "on_cancel", flow: "rto" }));
+      void postToBap(cancelContext, "on_cancel", buildOrderMessage(updatedOrder, { action: "on_cancel", flow: "rto" }));
     }
 
-    return sendSuccess(res, updatedOrder, 200, "RTO cancellation initiated (Flow 3B)");
+    // Immediately send final on_status after cancellation
+    if (updatedOrder.becknContext) {
+      const { replyContext } = await import("../utils/beckn");
+      const { postToBap } = await import("../services/ondc/callback.service");
+      const { buildOrderMessage } = await import("../services/ondc/order.service");
+      const statusContext = replyContext(
+        (updatedOrder.becknContext as unknown) as import("../utils/beckn").BecknContext,
+        "on_status"
+      );
+      void postToBap(statusContext, "on_status", buildOrderMessage(updatedOrder, { action: "on_status", flow: "rto" }));
+    }
+
+    return sendSuccess(res, updatedOrder, 200, "RTO cancellation initiated with final status (Flow 3B)");
   } catch (err) {
     return sendError(res, err instanceof Error ? err.message : "RTO cancellation failed", 400);
   }

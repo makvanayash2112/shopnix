@@ -60,6 +60,7 @@ export default function OrderDetailPage() {
   const [igmAction, setIgmAction] = useState<"REFUND" | "REPLACEMENT" | "CANCEL" | "NO_ACTION">("REFUND");
   const [rtoReason, setRtoReason] = useState("004");
   const [rtoDesc, setRtoDesc] = useState("");
+  const [rtoFinalState, setRtoFinalState] = useState("RTO-Delivered");
   const [showRtoDialog, setShowRtoDialog] = useState(false);
 
   useEffect(() => {
@@ -100,7 +101,7 @@ export default function OrderDetailPage() {
     try {
       await apiFetch(`/orders/${id}/rto-cancel`, {
         method: "PATCH",
-        body: JSON.stringify({ reasonId: rtoReason, reasonDesc: rtoDesc }),
+        body: JSON.stringify({ reasonId: rtoReason, reasonDesc: rtoDesc, finalState: rtoFinalState }),
       });
       alert("RTO cancellation initiated. Order will be returned to origin.");
       setShowRtoDialog(false);
@@ -281,7 +282,7 @@ export default function OrderDetailPage() {
       </Card>
 
       {/* RTO Cancel Card - Flow 3B */}
-      {(order.fulfillment?.state === "Out-for-delivery" || order.fulfillment?.state === "Delivering") && order.status !== "Cancelled" && (
+      {(order.fulfillment?.state === "Out-for-delivery" || order.fulfillment?.state === "Delivering") && !["Cancelled", "Returned", "Return completed"].includes(order.status) && (
         <Card title="Return to Origin (RTO) - Flow 3B">
           <p className="mb-4 text-sm text-slate-600">
             Initiate return to origin for out-for-delivery orders. All items will be restocked.
@@ -319,6 +320,14 @@ export default function OrderDetailPage() {
                 />
               </div>
               <div className="flex gap-2 mt-4">
+                <select
+                  className="flex h-9 w-full rounded-md border border-slate-200 bg-white px-3 py-1 text-sm"
+                  value={rtoFinalState}
+                  onChange={(e) => setRtoFinalState(e.target.value as any)}
+                >
+                  <option value="RTO-Delivered">RTO-Delivered</option>
+                  <option value="RTO-Disposed">RTO-Disposed</option>
+                </select>
                 <Button
                   variant="danger"
                   onClick={handleRtoCancel}
